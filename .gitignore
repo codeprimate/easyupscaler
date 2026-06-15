@@ -15,7 +15,6 @@ pip-wheel-metadata/
 
 # Virtual environments
 .venv/
-.venv-phase0/
 venv/
 ENV/
 
@@ -58,3 +57,5 @@ coverage.xml
 # Env files
 .env
 .env.*
+
+_local_docs/
