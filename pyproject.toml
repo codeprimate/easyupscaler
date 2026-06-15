@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "easyupscaler"
+version = "0.1.0"
+description = "CLI for upscaling images with GAN-based models"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13",
+    "pillow>=10",
+    "tomlkit>=0.13",
+    "torch>=2.3",
+    "spandrel>=0.4",
+    "spandrel-extra-arches",
+    "numpy>=1.26",
+]
+
+[project.urls]
+Homepage = "https://github.com/codeprimate/easyupscaler"
+Repository = "https://github.com/codeprimate/easyupscaler"
+Issues = "https://github.com/codeprimate/easyupscaler/issues"
+
+[project.scripts]
+easyupscaler = "easyupscaler.cli.main:main_entry"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-mock",
+    "mypy",
+    "ruff",
+    "types-Pillow",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["easyupscaler"]
+
+[tool.mypy]
+strict = false
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+addopts = "-m \"not slow\""

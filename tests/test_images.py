@@ -1,0 +1,69 @@
+from pathlib import Path
+
+import numpy as np
+import pytest
+from PIL import Image
+
+from easyupscaler.errors import ImageReadError
+from easyupscaler.io.images import OUTPUT_SUFFIX, ImageIO
+
+
+def _write_rgb_jpeg(path: Path, size: tuple[int, int] = (8, 8)) -> None:
+    image = Image.new("RGB", size, color=(128, 64, 32))
+    image.save(path, format="JPEG")
+
+
+def _write_rgba_png(path: Path) -> None:
+    image = Image.new("RGBA", (8, 8), color=(255, 0, 0, 128))
+    image.save(path, format="PNG")
+
+
+def _write_grayscale_png(path: Path) -> None:
+    image = Image.new("L", (8, 8), color=128)
+    image.save(path, format="PNG")
+
+
+def test_read_rgb_jpeg(tmp_path: Path) -> None:
+    source = tmp_path / "rgb.jpg"
+    _write_rgb_jpeg(source)
+    array = ImageIO().read(source)
+    assert array.shape == (8, 8, 3)
+    assert array.dtype == np.float32
+    assert array.max() <= 1.0
+
+
+def test_read_rgba_png_converts_to_rgb(tmp_path: Path) -> None:
+    source = tmp_path / "rgba.png"
+    _write_rgba_png(source)
+    array = ImageIO().read(source)
+    assert array.shape == (8, 8, 3)
+
+
+def test_read_grayscale_png_converts_to_rgb(tmp_path: Path) -> None:
+    source = tmp_path / "gray.png"
+    _write_grayscale_png(source)
+    array = ImageIO().read(source)
+    assert array.shape == (8, 8, 3)
+
+
+def test_read_corrupt_raises_image_read_error(tmp_path: Path) -> None:
+    source = tmp_path / "corrupt.jpg"
+    source.write_bytes(b"not-an-image")
+    with pytest.raises(ImageReadError, match="cannot read image"):
+        ImageIO().read(source)
+
+
+def test_write_naming_and_overwrite(tmp_path: Path) -> None:
+    source = tmp_path / "photo.jpg"
+    _write_rgb_jpeg(source)
+    image = ImageIO().read(source)
+    output = ImageIO().write(image, source)
+    assert output.name == f"photo{OUTPUT_SUFFIX}"
+    assert output.exists()
+
+    ImageIO().write(image, source)
+    assert output.exists()
+
+    with Image.open(output) as written:
+        assert written.format == "JPEG"
+        assert written.mode == "RGB"
