@@ -1,0 +1,15 @@
+# Architecture Decision Records
+
+Index of accepted decisions for easyupscaler MVP. Each ADR is immutable once accepted; supersede by adding a new numbered ADR.
+
+| ADR | Title | Status |
+|-----|-------|--------|
+| [001](./adr/001-spandrel-pytorch-backend.md) | Spandrel + PyTorch as sole upscaling backend | Accepted |
+| [002](./adr/002-inference-device-policy.md) | MPS with CPU fallback and op-level MPS fallback | Accepted |
+| [003](./adr/003-image-output-conventions.md) | Always JPEG output with `-upscaled` naming | Accepted |
+| [004](./adr/004-model-registry-and-import.md) | Model registry, XDG storage, and local import rules | Accepted |
+| [005](./adr/005-cli-framework-typer.md) | Typer for CLI framework | Accepted |
+| [006](./adr/006-batch-processing-and-exit-codes.md) | Sequential batch processing and exit codes | Accepted |
+| [007](./adr/007-tiled-inference.md) | Tiled inference for large images | Accepted |
+| [008](./adr/008-lazy-torch-imports.md) | Lazy imports for PyTorch and Spandrel | Accepted |
+| [009](./adr/009-development-toolchain.md) | uv, ruff, mypy, and Makefile for dev/build/test | Accepted |
