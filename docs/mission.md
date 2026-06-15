@@ -1,41 +1,85 @@
-Mission:  create a python cli that provides a simple and straightforward way to run GAN and other upscalers to resize images.
+# Mission
 
-Example:
+easyupscaler is a Python CLI for upscaling local images with community super-resolution models. One command imports weights, remembers a default, and runs batch upscales from the terminal — no GUI, no workflow editor, no weight conversion.
 
-$ easyupscaler models list => installed models
-$ easyupscaler models import /path/to/4xUltrasharp.pth => import/save a model
-$ easyupscaler models default 4xUltrasharp => saves preference for model as default
-$ easyupscaler input.png => input-upscaled.jpg
-$ easyupscaler --model remacri input.png => input-upscaled.jpg
-$ easyupscaler *.png => upscales each match (foo.png => foo-upscaled.jpg)
-$ easyupscaler photos/*.jpg --model 4xUltrasharp => batch with chosen model
+## Problem
 
-Features (MVP):
+Running GAN and ESRGAN-style upscalers against your own files means assembling PyTorch, Spandrel, tiling, device selection, and output handling. That work belongs in a tool, not in every script or one-off job.
 
-## Core upscaling
-- Upscale one or more images: `easyupscaler input.png` → `input-upscaled.jpg`
-- Batch via globbing: `easyupscaler *.png` or `easyupscaler photos/*.jpg` (shell expands patterns into multiple inputs)
-- Per-file output naming: `foo.png` → `foo-upscaled.jpg` (same directory as each input)
-- Override model per run: `easyupscaler --model remacri input.png`
-- Use saved default model when `--model` is omitted
-- Support common image formats for input and output (PNG, JPEG at minimum)
-- Tiled inference for large images (avoid GPU/memory exhaustion)
+Existing options embed upscaling inside larger products. ComfyUI and A1111 assume a node graph or web UI. Upscayl is a desktop app. None offer a focused, scriptable CLI that accepts arbitrary community `.pth` and `.safetensors` weights unchanged.
 
-## Model management
-- List installed models: `easyupscaler models list`
-- Import a model from a local file: `easyupscaler models import <path>`
-- Set the default upscaler model: `easyupscaler models default <model-name>`
+## Who this is for
 
-## CLI and runtime
-- Single `easyupscaler` entry point (Python CLI)
-- Local storage for imported models and default-model preference
-- Fast commands that do not load PyTorch (`models list`, `models default`, `--help`)
-- Clear errors for missing model, bad input path, failed import, and empty glob (no matches)
-- Report progress and per-file success/failure during batch runs
+- Developers and power users who already have upscaler weights from ComfyUI, A1111, or [OpenModelDB](https://openmodeldb.info/)
+- Anyone who wants `easyupscaler photo.png` in a shell script, Makefile, or batch folder workflow
+- Apple Silicon Mac users who want MPS inference with sensible CPU fallback
 
-## Out of scope for MVP
+Secondary support on Linux (CPU, best-effort) is acceptable. Windows and Intel Mac are not MVP targets.
+
+## What we are building
+
+A single entry point, `easyupscaler`, with two concerns:
+
+1. **Model lifecycle** — import local weight files, list what is installed, set a default, remove models you no longer need
+2. **Upscaling** — run the default or a named model against one or more image paths, with predictable outputs beside each input
+
+The shell expands globs. The CLI receives a flat list of paths. Runtime is local only: no network calls, no remote inference, no training.
+
+## MVP scope
+
+Capabilities in scope for the first release:
+
+### Upscaling
+
+- One or many images per invocation; continue on per-file failure
+- Override model per run or use a saved default
+- Common input formats (PNG, JPEG at minimum); consistent JPEG output beside each source file
+- Tiled inference for large images, with automatic tile-size reduction on out-of-memory
+- Progress and per-file success/failure reporting suitable for interactive use and piping
+
+### Model management
+
+- Import from a local file path; validate through Spandrel
+- List installed models with name, scale, and filename
+- Set and clear the default model preference
+- Remove a model from local storage
+
+Supported model purposes: super-resolution (`SR`) and 1× restoration/detail enhancement (`Restoration`). Scale comes from model metadata.
+
+### Runtime qualities
+
+- Fast housekeeping commands that never load PyTorch (`models list`, `models default`, `models remove`, `--help`)
+- Local persistence under XDG paths for config, registry, and copied weights
+- Clear errors for missing default, unknown model, bad input, failed import, and batch partial failure
+- Scriptable exit codes: success only when every requested file succeeds
+
+Command syntax, messages, and edge cases live in [specification.md](./specification.md). Install steps and troubleshooting live in [README.md](../README.md).
+
+## Success criteria
+
+The MVP succeeds when:
+
+- A user with Python 3.13+, a weight file, and five commands or fewer can import a model and upscale a photo
+- Batch runs are automation-friendly: predictable exit codes, per-file status, and progress on stdout
+- `models list` and `--help` respond without importing PyTorch
+- Any SR or Restoration model loadable by Spandrel can be imported and used without conversion
+
+## Out of scope (MVP)
+
 - GUI or web UI
 - Model training or fine-tuning
 - URL or remote model import
 - Cloud upload or remote inference API
-- ncnn-vulkan or multi-backend inference
+- ncnn-vulkan or additional inference backends
+- In-app glob expansion or recursive directory walks
+- Parallel batch workers
+- Custom output formats, quality settings, or destination directories (fixed JPEG contract for MVP)
+
+## Related documents
+
+| Document | Use when |
+|----------|----------|
+| [specification.md](./specification.md) | CLI contracts, flags, messages, exit codes |
+| [architecture.md](./architecture.md) | Layers, components, data flow, testing strategy |
+| [adr.md](./adr.md) | Immutable architectural decisions |
+| [README.md](../README.md) | Install, quickstart, user troubleshooting |
