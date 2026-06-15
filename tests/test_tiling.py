@@ -37,6 +37,14 @@ def test_small_image_single_pass() -> None:
     assert model.calls == 1
 
 
+def test_scale_one_preserves_dimensions() -> None:
+    model = FakeModel(scale=1)
+    tensor = torch.rand(1, 3, 256, 256)
+    output = tiled_upscale(model, tensor, tile_size=DEFAULT_TILE_SIZE, overlap=DEFAULT_TILE_OVERLAP)
+    assert output.shape == (1, 3, 256, 256)
+    assert model.calls == 1
+
+
 def test_large_image_uses_multiple_tiles() -> None:
     model = FakeModel(scale=2)
     tensor = torch.rand(1, 3, 1024, 1024)

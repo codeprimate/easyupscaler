@@ -24,7 +24,7 @@ easyupscaler is a single command that handles model import, defaults, batch runs
 - **Fast housekeeping** — `models list`, `models default`, and `--help` never load PyTorch
 - **Local only** — no network calls at runtime; models stay on disk under XDG paths
 
-Output is always `{stem}-upscaled.jpg` beside each input, JPEG quality 95, 4:4:4 chroma subsampling. PNG inputs (including RGBA and grayscale) are converted to RGB.
+Output is always `{stem}-upscaled.jpg` beside each input, JPEG quality 95, 4:4:4 chroma subsampling. If that file already exists, the next run writes `{stem}-upscaled-0001.jpg`, then `-0002`, and so on. PNG inputs (including RGBA and grayscale) are converted to RGB.
 
 ## Requirements
 
@@ -71,7 +71,7 @@ easyupscaler models default RealESRGAN_x4plus
 easyupscaler ~/Pictures/photo.jpg
 ```
 
-Output lands next to the input: `~/Pictures/photo-upscaled.jpg`. Dimensions are input size × model scale (a 2048×2048 image with a 4× model becomes 8192×8192).
+Output lands next to the input: `~/Pictures/photo-upscaled.jpg`. Dimensions are input size × model scale (a 2048×2048 image with a 4× model becomes 8192×8192; a 1× model keeps the same size for detail enhancement).
 
 Override the default for one run:
 
@@ -114,7 +114,7 @@ easyupscaler models remove <name> [--yes]
 
 `list`, `default`, and `remove` do not load PyTorch. `import` loads weights to validate architecture, purpose, and scale.
 
-Import derives the registry name from the filename stem (`RealESRGAN_x4plus.pth` → `RealESRGAN_x4plus`). Only super-resolution models (`purpose == "SR"`) are accepted. Duplicate names are rejected unless you pass `--force`.
+Import derives the registry name from the filename stem (`RealESRGAN_x4plus.pth` → `RealESRGAN_x4plus`). Accepted purposes are `SR` (upscalers) and `Restoration` (1× detail enhancers). Scale is read from the model. Duplicate names are rejected unless you pass `--force`.
 
 `.pth` imports emit a pickle security warning — only import models from sources you trust.
 
@@ -153,7 +153,7 @@ This mirrors patterns from ComfyUI and A1111, which also wrap Spandrel with thei
 | `no default model set` | Run `easyupscaler models default <name>` or pass `--model` |
 | `model 'foo' not found` | Run `easyupscaler models list` to see installed names |
 | `architecture not recognised` | Update easyupscaler; confirm the file is an SR model Spandrel supports |
-| `not a super-resolution model` | The checkpoint is a denoiser, face restorer, or other non-SR model |
+| `purpose '…' is not supported` | The checkpoint is inpainting, face restoration, or another unsupported type |
 | Slow on first run | PyTorch cold start is normal; later files in the same batch reuse the loaded model |
 | Out of memory | Tiling retries with smaller tiles automatically; very large images may still fail at the 128 px floor |
 | MPS unavailable | Inference falls back to CPU automatically |

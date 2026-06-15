@@ -157,8 +157,8 @@ Local file only ([ADR-004](./adr/004-model-registry-and-import.md)).
 
 1. Verify `PATH` exists and is readable
 2. Copy into the models directory (preserve filename)
-3. Load via Spandrel; require `ImageModelDescriptor` with `purpose == "SR"`
-4. Read `scale`; reject on `UnsupportedModelError`
+3. Load via Spandrel; require `purpose` in `SR` or `Restoration`; reject on `UnsupportedModelError`
+4. Read `scale` from Spandrel metadata; reject when scale &lt; 1
 5. Append registry entry
 
 Warn on stderr when importing `.pth` (pickle-based) checkpoints from untrusted sources. Prefer `.safetensors` when the user has that format.
@@ -209,8 +209,8 @@ Spandrel does **not** convert PIL/NumPy to tensors or implement tiling — that 
 - Input: PNG and JPEG via Pillow → RGB `numpy` float `[0, 1]`
 - Output: always JPEG, `quality=95`, `subsampling=0` ([ADR-003](./adr/003-image-output-conventions.md))
 - RGBA PNG: convert to RGB before save
-- Naming: `{input_stem}-upscaled.jpg` beside input
-- Overwrite existing output without prompt
+- Naming: `{input_stem}-upscaled.jpg` beside input; on conflict, `{input_stem}-upscaled-NNNN.jpg` ([ADR-003](./adr/003-image-output-conventions.md), [ADR-011](./adr/011-output-conflict-indexing.md))
+- Indexed suffix when base output exists; never overwrite without prompt
 
 ## Data flow
 
@@ -366,7 +366,7 @@ Dev dependency group (via uv): `pytest`, `ruff`, `mypy`, plus stubs as needed.
 | Empty path list | CLI / Service | Fail before inference |
 | Import: file not found | Import | Fail; do not register |
 | Import: unsupported architecture | Import | Fail with `UnsupportedModelError` message |
-| Import: not SR purpose | Import | Fail; model is not an upscaler |
+| Import: unsupported purpose | Import | Fail; purpose must be SR or Restoration |
 | Import: duplicate name | Registry | Fail |
 | MPS unavailable at startup | SpandrelBackend | CPU with warning ([ADR-002](./adr/002-inference-device-policy.md)) |
 | MPS op failure mid-inference | SpandrelBackend | Retry image on CPU |

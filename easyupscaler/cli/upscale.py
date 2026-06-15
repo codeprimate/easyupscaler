@@ -1,4 +1,5 @@
 import sys
+import time
 from pathlib import Path
 
 import typer
@@ -8,6 +9,7 @@ from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
 from easyupscaler.upscaling.service import UpscaleResult, UpscaleService
 
 EMPTY_INPUT_ERROR = "Error: no input images. Pass one or more file paths."
+COMPLETED_SUMMARY_TEMPLATE = "Completed: {succeeded} succeeded, {failed} failed in {elapsed}."
 
 
 def run_upscale(paths: list[str], *, model: str | None) -> None:
@@ -45,6 +47,7 @@ def run_upscale(paths: list[str], *, model: str | None) -> None:
         _print_result_line(result, tty=is_tty)
 
     try:
+        started_at = time.perf_counter()
         results = service.run(resolved_paths, model, on_progress=on_progress)
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -57,7 +60,14 @@ def run_upscale(paths: list[str], *, model: str | None) -> None:
     failed = len(results) - succeeded
 
     if is_tty:
-        typer.echo(f"Completed: {succeeded} succeeded, {failed} failed.")
+        elapsed = time.perf_counter() - started_at
+        typer.echo(
+            COMPLETED_SUMMARY_TEMPLATE.format(
+                succeeded=succeeded,
+                failed=failed,
+                elapsed=_format_elapsed(elapsed),
+            )
+        )
 
     if failed > 0:
         raise typer.Exit(code=1)
@@ -75,3 +85,12 @@ def _print_result_line(result: UpscaleResult, *, tty: bool) -> None:
         typer.echo(f"  ✗ {result.path.name} — {result.error}")
     else:
         typer.echo(f"{result.path} FAILED: {result.error}")
+
+
+def _format_elapsed(elapsed_seconds: float) -> str:
+    total_seconds = int(elapsed_seconds)
+    minutes, seconds = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"

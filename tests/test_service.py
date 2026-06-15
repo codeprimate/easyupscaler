@@ -34,6 +34,40 @@ def _seed_registry(registry: ModelRegistry, models_dir: Path) -> None:
     )
 
 
+def test_run_scale_one_preserves_output_dimensions(isolated_paths, tmp_path: Path) -> None:
+    models_dir = isolated_paths / "data" / "easyupscaler" / "models"
+    models_dir.mkdir(parents=True)
+    registry = ModelRegistry()
+    weight_path = models_dir / "1xDetail.pth"
+    weight_path.write_bytes(b"weights")
+    registry.add(
+        ModelEntry(
+            name="1xDetail",
+            filename="1xDetail.pth",
+            path=weight_path,
+            scale=1,
+            imported_at=datetime(2025, 6, 15, tzinfo=UTC),
+        )
+    )
+    ConfigService().set_default_model("1xDetail")
+
+    input_path = tmp_path / "input.jpg"
+    Image.new("RGB", (8, 6), color=(128, 128, 128)).save(input_path, format="JPEG")
+
+    class ScaleOneBackend:
+        scale = 1
+
+        def upscale(self, image: np.ndarray) -> np.ndarray:
+            return image.copy()
+
+    service = UpscaleService(registry=registry, backend_factory=lambda _: ScaleOneBackend())
+    results = service.run([input_path], None)
+    assert results[0].error is None
+    assert results[0].output is not None
+    with Image.open(results[0].output) as output_image:
+        assert output_image.size == (8, 6)
+
+
 def test_run_all_succeed(isolated_paths, tmp_path: Path) -> None:
     models_dir = isolated_paths / "data" / "easyupscaler" / "models"
     models_dir.mkdir(parents=True)

@@ -19,6 +19,12 @@ UNSUPPORTED_ARCHITECTURE_MESSAGE = (
     "Error: architecture not recognised by Spandrel. Try updating easyupscaler, "
     "or check that this is a supported SR model."
 )
+MIN_MODEL_SCALE = 1
+SUPPORTED_MODEL_PURPOSES = frozenset({"SR", "Restoration"})
+UNSUPPORTED_PURPOSE_MESSAGE = (
+    "Error: model purpose '{purpose}' is not supported. "
+    "Only SR and Restoration models are supported."
+)
 
 
 def import_model(path: Path, *, force: bool = False) -> ModelEntry:
@@ -55,20 +61,17 @@ def import_model(path: Path, *, force: bool = False) -> ModelEntry:
         raise ImportModelError(message) from exc
 
     purpose = str(descriptor.purpose)
-    if purpose != "SR":
+    if purpose not in SUPPORTED_MODEL_PURPOSES:
         if destination.exists():
             destination.unlink()
-        msg = (
-            f"Error: model is not a super-resolution model (purpose: {purpose}). "
-            "Only SR models are supported."
-        )
+        msg = UNSUPPORTED_PURPOSE_MESSAGE.format(purpose=purpose)
         raise ImportModelError(msg)
 
     scale = int(descriptor.scale)
-    if scale <= 1:
+    if scale < MIN_MODEL_SCALE:
         if destination.exists():
             destination.unlink()
-        msg = "Error: model reports scale 1 — not an upscaling model."
+        msg = f"Error: model reports invalid scale {scale}."
         raise ImportModelError(msg)
 
     entry = ModelEntry(

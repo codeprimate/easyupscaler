@@ -6,6 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from easyupscaler.cli.main import app
+from easyupscaler.cli.upscale import run_upscale
 from easyupscaler.upscaling.service import UpscaleResult
 
 runner = CliRunner()
@@ -47,6 +48,56 @@ def test_non_tty_output(isolated_paths, tmp_path: Path, monkeypatch: pytest.Monk
     result = runner.invoke(app, [str(image)])
     assert result.exit_code == 0
     assert f"{image} → {output}" in result.stdout
+
+
+def test_tty_completed_includes_elapsed(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = tmp_path / "input.jpg"
+    image.write_bytes(b"image")
+    output = tmp_path / "input-upscaled.jpg"
+    perf_counter_values = iter([100.0, 145.0])
+    echoed: list[str] = []
+
+    def fake_run(paths, model_name, on_progress=None):
+        result = UpscaleResult(path=image, output=output, error=None)
+        if on_progress:
+            on_progress(result)
+        return [result]
+
+    class FakeProgress:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+        def add_task(self, *args, **kwargs) -> int:
+            return 0
+
+        def advance(self, *args, **kwargs) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr("easyupscaler.cli.upscale.UpscaleService", lambda: MagicMock(run=fake_run))
+    monkeypatch.setattr("easyupscaler.cli.upscale.Progress", FakeProgress)
+    monkeypatch.setattr("easyupscaler.cli.upscale.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr(
+        "easyupscaler.cli.upscale.typer.echo",
+        lambda message, **kwargs: echoed.append(message),
+    )
+    monkeypatch.setattr(
+        "easyupscaler.cli.upscale.time.perf_counter",
+        lambda: next(perf_counter_values),
+    )
+
+    run_upscale([str(image)], model="test-model")
+
+    assert "Completed: 1 succeeded, 0 failed in 0:45." in echoed
 
 
 def test_partial_failure_exit_one(

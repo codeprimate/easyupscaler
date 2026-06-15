@@ -8,6 +8,9 @@ from easyupscaler.errors import ImageReadError
 JPEG_QUALITY = 95
 JPEG_SUBSAMPLING = 0
 OUTPUT_SUFFIX = "-upscaled.jpg"
+OUTPUT_INDEX_WIDTH = 4
+OUTPUT_INDEX_START = 1
+OUTPUT_INDEX_MAX = 9999
 
 
 class ImageIO:
@@ -25,7 +28,7 @@ class ImageIO:
         return array
 
     def write(self, image: np.ndarray, source_path: Path) -> Path:
-        output_path = source_path.parent / f"{source_path.stem}{OUTPUT_SUFFIX}"
+        output_path = self._resolve_output_path(source_path)
         clamped = np.clip(image, 0.0, 1.0)
         uint8_array = (clamped * 255.0).round().astype(np.uint8)
         pil_image = Image.fromarray(uint8_array, mode="RGB")
@@ -36,6 +39,22 @@ class ImageIO:
             subsampling=JPEG_SUBSAMPLING,
         )
         return output_path
+
+    def _resolve_output_path(self, source_path: Path) -> Path:
+        parent = source_path.parent
+        stem = source_path.stem
+        base_path = parent / f"{stem}{OUTPUT_SUFFIX}"
+        if not base_path.exists():
+            return base_path
+
+        for index in range(OUTPUT_INDEX_START, OUTPUT_INDEX_MAX + 1):
+            indexed_name = f"{stem}-upscaled-{index:0{OUTPUT_INDEX_WIDTH}d}.jpg"
+            indexed_path = parent / indexed_name
+            if not indexed_path.exists():
+                return indexed_path
+
+        msg = f"no available output path for {source_path.name}"
+        raise OSError(msg)
 
     def _normalize_to_rgb(self, image: Image.Image) -> Image.Image:
         if image.mode == "RGBA":

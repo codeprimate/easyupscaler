@@ -53,7 +53,7 @@ def test_read_corrupt_raises_image_read_error(tmp_path: Path) -> None:
         ImageIO().read(source)
 
 
-def test_write_naming_and_overwrite(tmp_path: Path) -> None:
+def test_write_uses_base_name_when_no_conflict(tmp_path: Path) -> None:
     source = tmp_path / "photo.jpg"
     _write_rgb_jpeg(source)
     image = ImageIO().read(source)
@@ -61,9 +61,38 @@ def test_write_naming_and_overwrite(tmp_path: Path) -> None:
     assert output.name == f"photo{OUTPUT_SUFFIX}"
     assert output.exists()
 
-    ImageIO().write(image, source)
-    assert output.exists()
-
     with Image.open(output) as written:
         assert written.format == "JPEG"
         assert written.mode == "RGB"
+
+
+def test_write_appends_index_on_conflict(tmp_path: Path) -> None:
+    source = tmp_path / "photo.jpg"
+    _write_rgb_jpeg(source)
+    image = ImageIO().read(source)
+    image_io = ImageIO()
+
+    first = image_io.write(image, source)
+    assert first.name == f"photo{OUTPUT_SUFFIX}"
+
+    second = image_io.write(image, source)
+    assert second.name == "photo-upscaled-0001.jpg"
+    assert second.exists()
+    assert first.exists()
+
+    third = image_io.write(image, source)
+    assert third.name == "photo-upscaled-0002.jpg"
+    assert third.exists()
+
+
+def test_write_fills_lowest_available_index(tmp_path: Path) -> None:
+    source = tmp_path / "photo.jpg"
+    _write_rgb_jpeg(source)
+    image = ImageIO().read(source)
+    image_io = ImageIO()
+
+    image_io.write(image, source)
+    (tmp_path / "photo-upscaled-0002.jpg").write_bytes(b"placeholder")
+
+    output = image_io.write(image, source)
+    assert output.name == "photo-upscaled-0001.jpg"

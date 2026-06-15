@@ -34,26 +34,60 @@ def test_import_missing_path(isolated_paths, tmp_path: Path) -> None:
 
 
 def test_import_non_sr(isolated_paths, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = tmp_path / "denoiser.pth"
+    source = tmp_path / "inpaint.pth"
     source.write_bytes(b"weights")
     monkeypatch.setattr(
         "easyupscaler.models.import_model._load_descriptor",
-        lambda path: FakeDescriptor(purpose="Restoration"),
+        lambda path: FakeDescriptor(purpose="Inpainting"),
     )
-    with pytest.raises(ImportModelError, match="not a super-resolution model"):
+    with pytest.raises(ImportModelError, match="purpose 'Inpainting' is not supported"):
         import_model(source)
     assert ModelRegistry().list() == []
 
 
+def test_import_restoration_scale_one(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "1xSkinDetail.pth"
+    source.write_bytes(b"weights")
+    monkeypatch.setattr(
+        "easyupscaler.models.import_model._load_descriptor",
+        lambda path: FakeDescriptor(purpose="Restoration", scale=1),
+    )
+    entry = import_model(source)
+    assert entry.name == "1xSkinDetail"
+    assert entry.scale == 1
+
+
 def test_import_scale_one(isolated_paths, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = tmp_path / "flat.pth"
+    source = tmp_path / "1xSkinDetail.pth"
     source.write_bytes(b"weights")
     monkeypatch.setattr(
         "easyupscaler.models.import_model._load_descriptor",
         lambda path: FakeDescriptor(scale=1),
     )
-    with pytest.raises(ImportModelError, match="scale 1"):
+    entry = import_model(source)
+    assert entry.name == "1xSkinDetail"
+    assert entry.scale == 1
+    assert ModelRegistry().get("1xSkinDetail").scale == 1
+
+
+def test_import_invalid_scale(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "invalid.pth"
+    source.write_bytes(b"weights")
+    monkeypatch.setattr(
+        "easyupscaler.models.import_model._load_descriptor",
+        lambda path: FakeDescriptor(scale=0),
+    )
+    with pytest.raises(ImportModelError, match="invalid scale 0"):
         import_model(source)
+    assert ModelRegistry().list() == []
 
 
 def test_import_duplicate(isolated_paths, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

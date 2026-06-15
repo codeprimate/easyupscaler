@@ -27,7 +27,7 @@ easyupscaler fills that gap: a single `easyupscaler` command that manages models
 - Shell expands glob patterns before the process starts; the CLI receives a flat list of paths
 - If `--model` is omitted, reads `default_model` from config; fails with a clear error if neither is set
 - Processes images **sequentially** in argument order; continues on per-file failure
-- Writes `{stem}-upscaled.jpg` beside each input (same directory); overwrites without prompt
+- Writes `{stem}-upscaled.jpg` beside each input (same directory); if that file already exists, writes `{stem}-upscaled-NNNN.jpg` with the lowest available 4-digit index (`0001`, `0002`, …)
 - Exits `0` if all files succeeded; exits `1` if any file failed or no paths were given
 - Shows a Rich progress bar when stdout is a TTY; falls back to one plain status line per file when piped or redirected
 
@@ -39,7 +39,7 @@ Upscaling 3 images with RealESRGAN_x4plus [████████████�
   ✓ photo.png → photo-upscaled.jpg
   ✓ scan.jpeg → scan-upscaled.jpg
   ✗ broken.png — unsupported format
-Completed: 2 succeeded, 1 failed.
+Completed: 2 succeeded, 1 failed in 1:23.
 
 # Non-TTY (pipe/redirect):
 photo.png → photo-upscaled.jpg
@@ -139,12 +139,13 @@ RealESRGAN_x4plus   4×     RealESRGAN_x4plus.pth
 | Input file is a directory | Per-file failure: `photos/ FAILED: not a file`. Continue batch. |
 | Input is a corrupt/truncated image | Per-file failure: `corrupt.jpg FAILED: cannot read image`. Continue batch. |
 | Output directory is read-only | Per-file failure with OS error message. Continue batch. |
-| `{stem}-upscaled.jpg` already exists | Silently overwrite. |
+| `{stem}-upscaled.jpg` already exists | Write `{stem}-upscaled-NNNN.jpg` using the lowest available 4-digit index (`0001`–`9999`). Do not overwrite. |
 | Model not in registry at upscale time | Fail before inference: `Error: model 'foo' not found. Installed: ...` Exit 1. |
 | No default model and `--model` omitted | Fail before inference: `Error: no default model set. Run 'easyupscaler models default <name>'.` Exit 1. |
 | Import: file does not exist | Fail: `Error: path not found: /path/to/file.pth` |
-| Import: not SR purpose | Fail: `Error: model is not a super-resolution model (purpose: Restoration). Only SR models are supported.` |
-| Import: scale is 1 or missing | Fail: `Error: model reports scale 1 — not an upscaling model.` |
+| Import: unsupported purpose (e.g. Inpainting, FaceSR) | Fail: `Error: model purpose '{purpose}' is not supported. Only SR and Restoration models are supported.` |
+| Import: scale < 1 or missing | Fail: `Error: model reports invalid scale {n}.` |
+| 1× SR model (scale = 1) | Allowed. Output dimensions match input; still writes `{stem}-upscaled.jpg`. |
 | Import: duplicate name, no `--force` | Fail: `Error: model 'RealESRGAN_x4plus' already exists. Use --force to replace.` |
 | Import: duplicate name, `--force` | Overwrite file and registry entry; print: `Replaced RealESRGAN_x4plus.` |
 | Import: corrupt weight file | Fail with Spandrel error text. No registry write. |
@@ -284,7 +285,7 @@ class ImageIO:
     # Raises ImageReadError on corrupt/unsupported files
 
     def write(self, image: np.ndarray, source_path: Path) -> Path: ...
-    # Writes {stem}-upscaled.jpg beside source_path
+    # Writes {stem}-upscaled.jpg beside source_path; on conflict, {stem}-upscaled-NNNN.jpg
     # quality=95, subsampling=0, convert to RGB first
     # Returns output path
 ```
@@ -395,6 +396,7 @@ install:
 
 - [ ] `easyupscaler models list` prints an empty-state message when no models are registered, without loading PyTorch
 - [ ] `easyupscaler models import /path/to/RealESRGAN_x4plus.pth` copies the file, registers name=`RealESRGAN_x4plus` scale=4, and prints success
+- [ ] `easyupscaler models import` accepts scale-1 SR models (e.g. detail enhancers); registry stores `scale: 1`
 - [ ] A `.pth` import emits a pickle security warning to stderr
 - [ ] `easyupscaler models list` shows a table with Name, Scale, Filename after import
 - [ ] Importing the same name a second time fails with an error message referencing `--force`
@@ -410,7 +412,7 @@ install:
 
 - [ ] `easyupscaler input.png` with a default model set produces `input-upscaled.jpg` in the same directory
 - [ ] `easyupscaler --model RealESRGAN_x4plus input.png` produces correct output ignoring default
-- [ ] Output JPEG is `quality=95`, `subsampling=0`; dimensions are `input × model.scale`
+- [ ] Output JPEG is `quality=95`, `subsampling=0`; dimensions are `input × model.scale` (1× models preserve input size)
 - [ ] `easyupscaler *.png` (shell-expanded) upscales all matched files; exit `0` if all succeed
 - [ ] One corrupt file in a batch does not abort the remaining files; exit `1` at end
 - [ ] A RGBA PNG input produces a valid RGB JPEG output (no crash, alpha discarded)
@@ -457,7 +459,7 @@ install:
 
 - [ ] `io/images.py` — `ImageIO.read()`: Pillow load, RGBA/grayscale normalise, float32 ndarray
 - [ ] `io/images.py` — `ImageIO.write()`: `{stem}-upscaled.jpg`, `quality=95`, `subsampling=0`
-- [ ] Unit tests: `test_images.py` with fixture PNG/JPEG files; test RGBA, grayscale, naming, overwrite
+- [ ] Unit tests: `test_images.py` with fixture PNG/JPEG files; test RGBA, grayscale, naming, conflict indexing
 
 ### Phase 5: Tiling
 
