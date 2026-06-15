@@ -377,12 +377,13 @@ Domain exceptions in `errors.py` map to user-facing CLI messages at the presenta
 
 ## Testing strategy
 
-Quality gate: **`make test`** runs ruff, mypy, then pytest ([ADR-009](./adr/009-development-toolchain.md)). All three must pass.
+Quality gate: **`make test`** runs ruff, mypy, then pytest with a **≥80% line coverage** gate on `easyupscaler` ([ADR-009](./adr/009-development-toolchain.md), [ADR-010](./adr/010-code-coverage-gate.md)). All must pass.
 
 | Level | Target | Notes |
 |-------|--------|-------|
 | Lint | `ruff check` | Part of `make test` |
 | Types | `mypy easyupscaler` | Part of `make test`; scoped ignores for untyped third-party only |
+| Coverage | `pytest-cov` on `easyupscaler` | Part of `make test`; fail under 80% line coverage (fast suite) |
 | Unit | `registry`, `settings`, output naming, tiling merge | No GPU |
 | Unit | `UpscaleService` with fake backend | Inject protocol mock |
 | Integration | CLI via `typer.testing.CliRunner` | Mock backend; verify list/default skip torch |
@@ -403,3 +404,4 @@ Linux CI uses mocked backend. MPS tests are manual or optional slow markers.
 | [007](./adr/007-tiled-inference.md) | Tiled inference for large images |
 | [008](./adr/008-lazy-torch-imports.md) | Lazy torch/spandrel imports |
 | [009](./adr/009-development-toolchain.md) | uv, ruff, mypy, Makefile |
+| [010](./adr/010-code-coverage-gate.md) | ≥80% coverage gate in make test |

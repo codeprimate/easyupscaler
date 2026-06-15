@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from easyupscaler.cli.main import app
+from easyupscaler.cli.main import app, main_entry
 from easyupscaler.cli.models import models_app
 from easyupscaler.config.settings import ConfigService
 from easyupscaler.models.registry import ModelEntry, ModelRegistry
@@ -27,6 +27,39 @@ def _add_model(isolated_paths, name: str = "RealESRGAN_x4plus", scale: int = 4) 
             imported_at=datetime(2025, 6, 15, tzinfo=UTC),
         )
     )
+
+
+def test_models_without_subcommand_shows_help(without_torch) -> None:
+    result = runner.invoke(models_app, [], prog_name="easyupscaler models")
+    assert result.exit_code == 0
+    assert "Missing command" not in result.output
+    assert "Manage installed upscaling models" in result.output
+    assert "list" in result.output
+    assert "install-completion" not in result.output
+    assert "show-completion" not in result.output
+    assert "torch" not in sys.modules
+
+
+def test_models_help_has_no_completion_options(without_torch) -> None:
+    result = runner.invoke(models_app, ["--help"], prog_name="easyupscaler models")
+    assert result.exit_code == 0
+    assert "install-completion" not in result.output
+    assert "show-completion" not in result.output
+
+
+def test_unknown_subcommand_shows_suggestion(without_torch) -> None:
+    result = runner.invoke(models_app, ["lsit"])
+    assert result.exit_code == 2
+    assert "No such command 'lsit'" in result.stderr
+    assert "Did you mean 'list'?" in result.stderr
+    assert "torch" not in sys.modules
+
+
+def test_unknown_subcommand_via_main_entry(without_torch, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["easyupscaler", "models", "lsit"])
+    with pytest.raises(SystemExit) as exc_info:
+        main_entry()
+    assert exc_info.value.code == 2
 
 
 def test_help_does_not_import_torch(without_torch) -> None:
@@ -51,10 +84,13 @@ def test_list_empty(isolated_paths, without_torch) -> None:
 
 def test_list_with_models(isolated_paths, without_torch) -> None:
     _add_model(isolated_paths)
+    weight_path = isolated_paths / "data" / "easyupscaler" / "models" / "RealESRGAN_x4plus.pth"
     result = runner.invoke(models_app, ["list"])
     assert result.exit_code == 0
     assert "Name" in result.stdout
+    assert "Path" in result.stdout
     assert "RealESRGAN_x4plus" in result.stdout
+    assert str(weight_path) in result.stdout
     assert "4×" in result.stdout
     assert "torch" not in sys.modules
 

@@ -7,11 +7,23 @@ from easyupscaler.config.settings import ConfigService
 from easyupscaler.errors import DuplicateModelError, ImportModelError, ModelNotFoundError
 from easyupscaler.models.registry import ModelRegistry
 
-models_app = typer.Typer(help="Manage installed upscaling models.")
+models_app = typer.Typer(
+    help="Manage installed upscaling models.",
+    add_completion=False,
+)
+
+
+@models_app.callback(invoke_without_command=True)
+def models_main(ctx: typer.Context) -> None:
+    """Show available model commands when no subcommand is given."""
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
 
 EMPTY_MODELS_MESSAGE = (
     "No models installed. Use 'easyupscaler models import <path>' to add one."
 )
+PATH_COLUMN_HEADER = "Path"
 
 
 def _format_models_table(entries: list) -> str:
@@ -20,19 +32,22 @@ def _format_models_table(entries: list) -> str:
 
     name_width = max(len("Name"), *(len(entry.name) for entry in entries))
     scale_width = len("Scale")
-    filename_width = max(len("Filename"), *(len(entry.filename) for entry in entries))
+    path_width = max(
+        len(PATH_COLUMN_HEADER),
+        *(len(str(entry.path)) for entry in entries),
+    )
 
     name_col = "Name".ljust(name_width)
     scale_col = "Scale".ljust(scale_width)
-    filename_col = "Filename".ljust(filename_width)
-    header = f"{name_col}  {scale_col}  {filename_col}"
+    path_col = PATH_COLUMN_HEADER.ljust(path_width)
+    header = f"{name_col}  {scale_col}  {path_col}"
     divider = "─" * len(header)
     rows = []
     for entry in entries:
         scale_text = f"{entry.scale}×".ljust(scale_width)
         row = (
             f"{entry.name.ljust(name_width)}  {scale_text}  "
-            f"{entry.filename.ljust(filename_width)}"
+            f"{str(entry.path).ljust(path_width)}"
         )
         rows.append(row)
     return "\n".join([header, divider, *rows])

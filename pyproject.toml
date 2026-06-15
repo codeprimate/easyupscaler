@@ -35,6 +35,7 @@ dev = [
     "mypy",
     "ruff",
     "types-Pillow",
+    "pytest-cov",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -54,4 +55,12 @@ select = ["E", "F", "I", "UP"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
-addopts = "-m \"not slow\""
+addopts = "-m \"not slow\" --cov=easyupscaler --cov-report=term-missing --cov-fail-under=80"
+
+[tool.coverage.run]
+source = ["easyupscaler"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_empty = true

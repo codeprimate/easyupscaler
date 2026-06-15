@@ -164,7 +164,7 @@ Requires [uv](https://docs.astral.sh/uv/) for the locked dev environment:
 
 ```bash
 make sync       # uv sync — dev dependencies into .venv
-make test       # ruff + mypy + pytest (slow tests excluded)
+make test       # ruff + mypy + pytest with ≥80% coverage (slow tests excluded)
 make build      # build wheel
 ```
 

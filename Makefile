@@ -16,4 +16,5 @@ build:
 	uv build
 
 install:
-	python3 -m pip install .
+	python -m pip uninstall easyupscaler
+	python -m pip install .

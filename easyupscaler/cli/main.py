@@ -52,12 +52,18 @@ def main(
     run_upscale(paths or [], model=model)
 
 
-def main_entry() -> None:
+def main_entry() -> int:
     argv = sys.argv[1:]
     if argv and argv[0] == "models":
-        models_app(args=argv[1:], prog_name="easyupscaler models", standalone_mode=False)
-        return
-    app(args=argv, prog_name="easyupscaler", standalone_mode=False)
+        return (
+            models_app(
+                args=argv[1:],
+                prog_name="easyupscaler models",
+                standalone_mode=True,
+            )
+            or 0
+        )
+    return app(args=argv, prog_name="easyupscaler", standalone_mode=True) or 0
 
 
 if __name__ == "__main__":

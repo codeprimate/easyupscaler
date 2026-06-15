@@ -13,3 +13,4 @@ Index of accepted decisions for easyupscaler MVP. Each ADR is immutable once acc
 | [007](./adr/007-tiled-inference.md) | Tiled inference for large images | Accepted |
 | [008](./adr/008-lazy-torch-imports.md) | Lazy imports for PyTorch and Spandrel | Accepted |
 | [009](./adr/009-development-toolchain.md) | uv, ruff, mypy, and Makefile for dev/build/test | Accepted |
+| [010](./adr/010-code-coverage-gate.md) | ≥80% line coverage gate via pytest-cov | Accepted |
