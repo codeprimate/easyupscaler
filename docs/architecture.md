@@ -112,7 +112,7 @@ Built with Typer ([ADR-005](./adr/005-cli-framework-typer.md)). Lazy-imports tor
 | Command | Handler | Loads torch? | Service calls |
 |---------|---------|--------------|---------------|
 | `easyupscaler scale [--model NAME] <paths...>` | `cli/scale.py` | Yes | `UpscaleService.run(paths, model=NAME)` |
-| `easyupscaler denoise <mode> [--strength] <paths...>` | `cli/denoise.py` | Yes | `DenoiseService.run(paths, mode, strength)` |
+| `easyupscaler denoise <mode> [--strength] [--no-text] <paths...>` | `cli/denoise.py` | Yes | `DenoiseService.run(paths, mode, strength)` |
 | `easyupscaler models list` | `cli/models.py` | No | `ModelRegistry.list()` |
 | `easyupscaler models import PATH` | `cli/models.py` | Yes | `import_model(path)` |
 | `easyupscaler models default NAME` | `cli/models.py` | No | `ConfigService.set_default_model(NAME)` |
@@ -219,7 +219,7 @@ Spandrel does **not** convert PIL/NumPy to tensors or implement tiling — that 
 - Output: always JPEG, `quality=95`, `subsampling=0` ([ADR-003](./adr/003-image-output-conventions.md))
 - RGBA PNG: convert to RGB before save
 - Naming: `{input_stem}-upscaled.jpg` beside input (default) or under optional `output_dir` ([ADR-016](./adr/016-optional-output-directory.md)); on conflict, `{input_stem}-upscaled-NNNN.jpg` ([ADR-003](./adr/003-image-output-conventions.md), [ADR-011](./adr/011-output-conflict-indexing.md))
-- `write()`, `write_png()`, and `write_denoised()` accept optional `output_dir: Path | None`
+- `write()`, `write_png()`, `write_denoised()`, and `write_txt()` accept optional `output_dir: Path | None`
 - When `output_dir` is set, ensures the directory exists before resolving indexed filenames
 - Indexed suffix when base output exists; never overwrite without prompt
 
@@ -311,8 +311,13 @@ easyupscaler/
     catalog.py                # managed model catalog and selection matrix
     document_constants.py     # Sauvola, morph, anti-alias, flat-snap constants
     document_enhance.py       # enhance_document_contrast: binarize + post-process
+    document_ocr.py           # Tesseract OCR on grayscale array
+    document_ocrai.py         # VLM OCR orchestration (resize, prompt)
+    ocrai_catalog.py          # VLM filenames, URLs, constants
+    ocrai_downloader.py       # two-file GGUF download with repo fallback
+    ocrai_service.py          # OcraiService: llama.cpp load + extract_text
     downloader.py             # auto-download denoise weights
-    pipeline.py               # DenoiseService (document branch in _process_path)
+    pipeline.py               # DenoiseService (document branch + OCR in _process_path)
     backends/
       base.py                 # DenoiseBackend protocol
       spandrel_common.py      # shared Spandrel load/device/tiling
@@ -375,6 +380,8 @@ Activate the desired Python (system or venv) before `make install` to control wh
 | `torch` | Inference runtime (lazy import) |
 | `spandrel` | Load and run upscaler weights (lazy import) |
 | `numpy` | Array interchange between I/O and backend |
+| `llama-cpp-python` | VLM OCR via `--ocrai` (lazy import; vision handler required) |
+| `pytesseract` | Default document OCR via Tesseract |
 
 Versions are pinned in `pyproject.toml`. No HTTP client in MVP.
 
@@ -442,3 +449,5 @@ Linux CI uses mocked backend. MPS tests are manual or optional slow markers.
 | [018](./adr/018-document-two-pass-pipeline.md) | Two-pass AI pipeline for document denoise | Superseded by 019 |
 | [019](./adr/019-document-binarize-antialias.md) | Document mode: Archiver + Sauvola binarize + anti-alias |
 | [020](./adr/020-document-postprocessing-refinements.md) | Document post-processing: morph, edge-only AA, flat snap |
+| [021](./adr/021-document-ocr-tesseract.md) | Default Tesseract OCR for document denoise |
+| [022](./adr/022-opt-in-vlm-ocr-ocrai.md) | Opt-in VLM OCR via `--ocrai` |

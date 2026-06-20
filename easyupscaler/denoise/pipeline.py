@@ -15,12 +15,21 @@ from easyupscaler.denoise.catalog import (
     path_for,
     resolve_models,
 )
+from easyupscaler.denoise.document_ocr import extract_document_text, is_tesseract_available
 from easyupscaler.denoise.downloader import DownloadProgressCallback, ensure_models
 from easyupscaler.denoise.memory import MULTIPASS_SPILL_ENABLED
 from easyupscaler.errors import DenoiseDownloadError, DenoiseModelCorruptError, ImageReadError
 from easyupscaler.io.images import ImageIO, is_heic_path
 
 BackendFactory = Callable[[CatalogKey], DenoiseBackend | FBCNNDenoiseBackend]
+OcrExtractor = Callable[[np.ndarray], str]
+OcrAvailabilityCheck = Callable[[], bool]
+WarningCallback = Callable[[str], None]
+
+TESSERACT_MISSING_WARNING = (
+    "Warning: Tesseract not found; skipping text extraction. Install tesseract to enable OCR."
+)
+OCR_FAILED_WARNING_TEMPLATE = "Warning: OCR failed for {filename}: {reason}"
 
 
 @dataclass
@@ -29,6 +38,7 @@ class DenoiseResult:
     output: Path | None
     error: str | None
     pass_description: str | None = None
+    text_output: Path | None = None
 
 
 class DenoiseService:
@@ -38,10 +48,14 @@ class DenoiseService:
         image_io: ImageIO | None = None,
         backend_factory: BackendFactory | None = None,
         download_models: Callable[..., None] | None = None,
+        ocr_extractor: OcrExtractor | None = None,
+        ocr_available: OcrAvailabilityCheck | None = None,
     ) -> None:
         self._image_io = image_io or ImageIO()
         self._backend_factory = backend_factory or _default_backend_factory
         self._download_models = download_models or ensure_models
+        self._ocr_extractor = ocr_extractor or extract_document_text
+        self._ocr_available = ocr_available or is_tesseract_available
 
     def run(
         self,
@@ -52,6 +66,8 @@ class DenoiseService:
         on_download_progress: DownloadProgressCallback | None = None,
         *,
         output_dir: Path | None = None,
+        extract_text: bool = True,
+        on_warning: WarningCallback | None = None,
     ) -> list[DenoiseResult]:
         batch_is_heic = any(is_heic_path(path) for path in paths)
         required_keys = resolve_models(mode, strength, is_heic=batch_is_heic)
@@ -61,9 +77,18 @@ class DenoiseService:
             raise ValueError(str(exc)) from None
 
         results: list[DenoiseResult] = []
+        batch_state = {"tesseract_warned": False}
 
         for path in paths:
-            result = self._process_path(path, mode, strength, output_dir=output_dir)
+            result = self._process_path(
+                path,
+                mode,
+                strength,
+                output_dir=output_dir,
+                extract_text=extract_text,
+                on_warning=on_warning,
+                batch_state=batch_state,
+            )
             results.append(result)
             if on_progress is not None:
                 on_progress(result)
@@ -78,6 +103,9 @@ class DenoiseService:
         strength: DenoiseStrength,
         *,
         output_dir: Path | None = None,
+        extract_text: bool = True,
+        on_warning: WarningCallback | None = None,
+        batch_state: dict[str, bool] | None = None,
     ) -> DenoiseResult:
         if not path.exists():
             return DenoiseResult(path=path, output=None, error="file not found")
@@ -101,6 +129,14 @@ class DenoiseService:
                 output = self._image_io.write_png(
                     processed, path, mode="L", output_dir=output_dir
                 )
+                text_output = self._maybe_extract_document_text(
+                    processed,
+                    path,
+                    output_dir=output_dir,
+                    extract_text=extract_text,
+                    on_warning=on_warning,
+                    batch_state=batch_state,
+                )
             else:
                 preserve_grayscale = mode == "manga"
                 output = self._image_io.write_denoised(
@@ -110,6 +146,7 @@ class DenoiseService:
                     was_grayscale=was_grayscale,
                     output_dir=output_dir,
                 )
+                text_output = None
         except ImageReadError as exc:
             return DenoiseResult(path=path, output=None, error=str(exc))
         except OSError as exc:
@@ -122,7 +159,44 @@ class DenoiseService:
                 output=output,
                 error=None,
                 pass_description=pass_description,
+                text_output=text_output,
             )
+
+    def _maybe_extract_document_text(
+        self,
+        processed: np.ndarray,
+        path: Path,
+        *,
+        output_dir: Path | None,
+        extract_text: bool,
+        on_warning: WarningCallback | None,
+        batch_state: dict[str, bool] | None,
+    ) -> Path | None:
+        if not extract_text:
+            return None
+
+        if not self._ocr_available():
+            if batch_state is not None and not batch_state.get("tesseract_warned", False):
+                if on_warning is not None:
+                    on_warning(TESSERACT_MISSING_WARNING)
+                if batch_state is not None:
+                    batch_state["tesseract_warned"] = True
+            return None
+
+        gray_uint8 = (np.clip(processed, 0.0, 1.0) * 255.0).round().astype(np.uint8)
+        try:
+            text = self._ocr_extractor(gray_uint8)
+        except Exception as exc:
+            if on_warning is not None:
+                on_warning(
+                    OCR_FAILED_WARNING_TEMPLATE.format(
+                        filename=path.name,
+                        reason=str(exc),
+                    )
+                )
+            return None
+
+        return self._image_io.write_txt(text, path, output_dir=output_dir)
 
     def _run_passes(
         self,

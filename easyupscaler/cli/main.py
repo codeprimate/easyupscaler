@@ -76,7 +76,7 @@ def denoise_command(
         metavar="MODE",
         help=(
             "Content type: photo (photographs), art (digital illustrations), "
-            "or manga (manga and comics)."
+            "manga (manga and comics), or document (scanned or photographed text)."
         ),
     ),
     paths: list[str] = typer.Argument(
@@ -89,6 +89,11 @@ def denoise_command(
         "--strength",
         help="Denoising intensity: low (subtle, preserves detail) or high (aggressive).",
     ),
+    no_text: bool = typer.Option(
+        False,
+        "--no-text",
+        help="Skip OCR text extraction (document mode only).",
+    ),
     output: str | None = typer.Option(
         None,
         "--output",
@@ -99,7 +104,13 @@ def denoise_command(
     from easyupscaler.cli.denoise import run_denoise
 
     output_dir = Path(output) if output is not None else None
-    run_denoise(paths, mode=mode, strength=strength, output_dir=output_dir)
+    run_denoise(
+        paths,
+        mode=mode,
+        strength=strength,
+        output_dir=output_dir,
+        extract_text=not no_text,
+    )
 
 
 def main_entry() -> int:

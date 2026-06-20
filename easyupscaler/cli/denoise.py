@@ -25,6 +25,7 @@ def run_denoise(
     mode: str,
     strength: str,
     output_dir: Path | None = None,
+    extract_text: bool = True,
 ) -> None:
     if not paths:
         typer.echo(EMPTY_INPUT_ERROR, err=True)
@@ -118,6 +119,9 @@ def run_denoise(
                 denoise_progress.advance(denoise_task_id)
             _print_result_line(result, tty=is_tty)
 
+        def on_warning(message: str) -> None:
+            typer.echo(message, err=True)
+
         results = service.run(
             resolved_paths,
             mode,  # type: ignore[arg-type]
@@ -125,6 +129,8 @@ def run_denoise(
             on_progress=on_progress,
             on_download_progress=download_callback,
             output_dir=output_dir,
+            extract_text=extract_text,
+            on_warning=on_warning,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -157,16 +163,26 @@ def _print_result_line(result: DenoiseResult, *, tty: bool) -> None:
         pass_note = ""
         if tty and result.pass_description:
             pass_note = f"   (2 passes: {result.pass_description})"
+        output_names = _format_output_artifacts(result, tty=tty)
         if tty:
-            typer.echo(f"  ✓ {result.path.name} → {result.output.name}{pass_note}")
+            typer.echo(f"  ✓ {result.path.name} → {output_names}{pass_note}")
         else:
-            typer.echo(f"{result.path} → {result.output}")
+            typer.echo(f"{result.path} → {output_names}")
         return
 
     if tty:
         typer.echo(f"  ✗ {result.path.name} — {result.error}")
     else:
         typer.echo(f"{result.path} FAILED: {result.error}")
+
+
+def _format_output_artifacts(result: DenoiseResult, *, tty: bool) -> str:
+    if result.output is None:
+        return ""
+    outputs = [result.output.name if tty else str(result.output)]
+    if result.text_output is not None:
+        outputs.append(result.text_output.name if tty else str(result.text_output))
+    return ", ".join(outputs)
 
 
 def _format_elapsed(elapsed_seconds: float) -> str:

@@ -20,6 +20,7 @@ dependencies = [
     "numpy>=1.26",
     "scikit-image>=0.22",
     "pillow-heif>=0.16",
+    "pytesseract>=0.3",
 ]
 
 [project.urls]

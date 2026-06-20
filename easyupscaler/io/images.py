@@ -9,6 +9,8 @@ JPEG_QUALITY = 95
 JPEG_SUBSAMPLING = 0
 OUTPUT_SUFFIX = "-upscaled.jpg"
 DENOISE_OUTPUT_SUFFIX = "-denoised.png"
+TEXT_OUTPUT_SUFFIX = ".txt"
+TEXT_OUTPUT_EXTENSION = ".txt"
 OUTPUT_INDEX_WIDTH = 4
 OUTPUT_INDEX_START = 1
 OUTPUT_INDEX_MAX = 9999
@@ -119,6 +121,31 @@ class ImageIO:
                 output_dir=output_dir,
             )
         return self.write_png(image, source_path, mode="RGB", output_dir=output_dir)
+
+    def write_txt(
+        self,
+        text: str,
+        source_path: Path,
+        *,
+        output_dir: Path | None = None,
+    ) -> Path:
+        output_path = self._resolve_text_output_path(source_path, output_dir=output_dir)
+        output_path.write_text(text, encoding="utf-8")
+        return output_path
+
+    def _resolve_text_output_path(
+        self,
+        source_path: Path,
+        *,
+        output_dir: Path | None = None,
+    ) -> Path:
+        return self._resolve_indexed_output_path(
+            source_path,
+            base_suffix=TEXT_OUTPUT_SUFFIX,
+            indexed_stem_suffix="",
+            extension=TEXT_OUTPUT_EXTENSION,
+            output_dir=output_dir,
+        )
 
     def _resolve_denoise_output_path(
         self,

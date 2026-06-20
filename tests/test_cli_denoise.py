@@ -75,6 +75,61 @@ def test_document_mode_high_strength_routes_to_service(
     assert captured["strength"] == "high"
 
 
+def test_no_text_flag_forwards_to_service(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = tmp_path / "scan.jpg"
+    image.write_bytes(b"image")
+    captured: dict[str, bool] = {}
+
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
+        captured["extract_text"] = kwargs.get("extract_text")
+        return []
+
+    monkeypatch.setattr(
+        "easyupscaler.cli.denoise.DenoiseService",
+        lambda: MagicMock(run=fake_run),
+    )
+
+    result = runner.invoke(app, ["denoise", "document", str(image), "--no-text"])
+    assert result.exit_code == 0
+    assert captured["extract_text"] is False
+
+
+def test_document_mode_stdout_shows_png_and_txt(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = tmp_path / "scan.jpg"
+    image.write_bytes(b"image")
+    png_output = tmp_path / "scan-denoised.png"
+    txt_output = tmp_path / "scan.txt"
+
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
+        result = DenoiseResult(
+            path=image,
+            output=png_output,
+            error=None,
+            text_output=txt_output,
+        )
+        if on_progress:
+            on_progress(result)
+        return [result]
+
+    monkeypatch.setattr(
+        "easyupscaler.cli.denoise.DenoiseService",
+        lambda: MagicMock(run=fake_run),
+    )
+    monkeypatch.setattr("easyupscaler.cli.denoise.sys.stdout.isatty", lambda: False)
+
+    result = runner.invoke(app, ["denoise", "document", str(image)])
+    assert result.exit_code == 0
+    assert f"{png_output}, {txt_output}" in result.stdout
+
+
 def test_invalid_strength_exit_one(without_torch, tmp_path: Path) -> None:
     image = tmp_path / "input.jpg"
     image.write_bytes(b"image")

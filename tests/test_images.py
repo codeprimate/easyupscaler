@@ -171,3 +171,31 @@ def test_is_heic_path() -> None:
     assert is_heic_path(Path("photo.heic")) is True
     assert is_heic_path(Path("photo.HEIF")) is True
     assert is_heic_path(Path("photo.jpg")) is False
+
+
+def test_write_txt_uses_input_stem(tmp_path: Path) -> None:
+    source = tmp_path / "scan.jpg"
+    source.write_bytes(b"image")
+    output = ImageIO().write_txt("hello", source)
+    assert output.name == "scan.txt"
+    assert output.read_text(encoding="utf-8") == "hello"
+
+
+def test_write_txt_conflict_index(tmp_path: Path) -> None:
+    source = tmp_path / "scan.jpg"
+    source.write_bytes(b"image")
+    image_io = ImageIO()
+    first = image_io.write_txt("first", source)
+    second = image_io.write_txt("second", source)
+    assert first.name == "scan.txt"
+    assert second.name == "scan-0001.txt"
+    assert second.read_text(encoding="utf-8") == "second"
+
+
+def test_write_txt_custom_output_dir(tmp_path: Path) -> None:
+    source = tmp_path / "scan.jpg"
+    source.write_bytes(b"image")
+    output_dir = tmp_path / "results"
+    output = ImageIO().write_txt("text", source, output_dir=output_dir)
+    assert output == output_dir / "scan.txt"
+    assert output.exists()

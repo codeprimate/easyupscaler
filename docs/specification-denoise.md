@@ -32,15 +32,19 @@ This replaces the bare `easyupscaler <files>` default command. All behavior is i
 ### Command syntax
 
 ```
-easyupscaler denoise <mode> [--strength low|high] [--output DIR] <image> [<image> ...]
+easyupscaler denoise <mode> [--strength low|high] [--no-text] [--ocrai] [--output DIR] <image> [<image> ...]
 ```
 
 | Argument / flag | Values | Default | Notes |
 |-----------------|--------|---------|-------|
 | `<mode>` | `photo`, `art`, `manga`, `document` | Required | Controls model selection and output colorspace |
 | `--strength` | `low`, `high` | `low` | Controls which model variant is selected |
+| `--no-text` | flag | off | Skip OCR text extraction (`document` mode only; no-op elsewhere) |
+| `--ocrai` | flag | off | Use VLM OCR instead of Tesseract (`document` mode only; see [specification-document-mode.md §6](./specification-document-mode.md#6-opt-in-vlm-ocr-ocrai)) |
 | `--output` / `-o` | Directory path | (beside input) | Write all outputs under `DIR`; created if missing ([ADR-016](./adr/016-optional-output-directory.md)) |
 | `<image> ...` | One or more file paths | Required | Shell expands globs before invocation |
+
+When both `--ocrai` and `--no-text` are passed, `--no-text` wins: no OCR runs and no stderr warning is emitted.
 
 **`--model` is not accepted.** Model selection is automatic, governed by `<mode>`, `--strength`, and input file format. Passing `--model` is an error.
 
@@ -163,6 +167,7 @@ All URLs verified via HTTP HEAD (200 OK) on 2026-06-20. File sizes:
 - Optimized for scanned or photographed text. Single Archiver Medium AI pass, then CPU post-processing (Sauvola binarization, morph cleanup, edge anti-alias, flat-region snap).
 - Output is always grayscale PNG regardless of input colorspace.
 - `--strength` controls Sauvola window size and anti-alias sigma, not the AI model.
+- Default OCR uses Tesseract; pass `--ocrai` for multilingual VLM OCR ([specification-document-mode.md §6](./specification-document-mode.md#6-opt-in-vlm-ocr-ocrai)).
 - Full specification: [specification-document-mode.md](./specification-document-mode.md).
 
 ---
@@ -277,6 +282,11 @@ easyupscaler/
     catalog.py               # DENOISE_MODEL_CATALOG: names, filenames, URLs, required for which mode/strength
     document_constants.py    # document mode post-processing constants
     document_enhance.py      # enhance_document_contrast(): Sauvola binarize + post-process
+    document_ocr.py          # Tesseract OCR on grayscale array
+    document_ocrai.py        # VLM OCR orchestration (resize, delegate to OcraiService)
+    ocrai_catalog.py         # VLM filenames, URLs, prompt, generation constants
+    ocrai_downloader.py      # ensure_ocrai_models(): two-file download with repo fallback
+    ocrai_service.py         # OcraiService: llama.cpp load + extract_text()
     downloader.py            # download_model(key): fetch + verify + save; progress callback
     pipeline.py              # DenoiseService: single-pass, two-pass (photo HEIC), document branch
     backends/

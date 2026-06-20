@@ -203,10 +203,112 @@ def test_document_mode_batch_continues_after_too_small(
     service = DenoiseService(
         backend_factory=lambda key: FakeBackend(key),
         download_models=lambda keys, **kwargs: None,
+        ocr_available=lambda: True,
+        ocr_extractor=lambda gray: "ocr text",
     )
     results = service.run([tiny, good], "document", "high")
     assert results[0].error is not None
     assert results[1].error is None
+    assert results[1].text_output is not None
+    assert results[1].text_output.name == "good.txt"
+
+
+def test_document_mode_writes_text_with_injected_ocr(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+        ocr_available=lambda: True,
+        ocr_extractor=lambda gray: "page text",
+    )
+    results = service.run([source], "document", "low")
+    assert results[0].error is None
+    assert results[0].text_output is not None
+    assert results[0].text_output.name == "scan.txt"
+    assert results[0].text_output.read_text(encoding="utf-8") == "page text"
+
+
+def test_document_mode_extract_text_false_skips_ocr(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+        ocr_available=lambda: True,
+        ocr_extractor=lambda gray: "should not run",
+    )
+    results = service.run([source], "document", "low", extract_text=False)
+    assert results[0].error is None
+    assert results[0].text_output is None
+    assert not (tmp_path / "scan.txt").exists()
+
+
+def test_document_mode_ocr_failure_still_writes_png(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+    warnings: list[str] = []
+
+    def failing_ocr(gray):
+        raise RuntimeError("ocr broke")
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+        ocr_available=lambda: True,
+        ocr_extractor=failing_ocr,
+    )
+    results = service.run(
+        [source],
+        "document",
+        "low",
+        on_warning=warnings.append,
+    )
+    assert results[0].error is None
+    assert results[0].output is not None
+    assert results[0].text_output is None
+    assert len(warnings) == 1
+    assert "OCR failed for scan.jpg" in warnings[0]
+
+
+def test_document_mode_missing_tesseract_warns_once_per_batch(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "first.jpg"
+    second = tmp_path / "second.jpg"
+    _write_test_jpeg(first, size=100)
+    _write_test_jpeg(second, size=100)
+    warnings: list[str] = []
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+        ocr_available=lambda: False,
+    )
+    results = service.run(
+        [first, second],
+        "document",
+        "low",
+        on_warning=warnings.append,
+    )
+    assert results[0].error is None
+    assert results[1].error is None
+    assert results[0].text_output is None
+    assert results[1].text_output is None
+    assert len(warnings) == 1
+    assert "Tesseract not found" in warnings[0]
 
 
 def _write_test_jpeg(path: Path, size: int = 4) -> None:
