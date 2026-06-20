@@ -12,6 +12,7 @@ def test_help_does_not_import_torch(without_torch) -> None:
     assert result.exit_code == 0
     assert "scale" in result.stdout
     assert "denoise" in result.stdout
+    assert "easyupscaler 0.1.0" in result.stdout
     assert "torch" not in sys.modules
 
 

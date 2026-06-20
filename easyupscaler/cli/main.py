@@ -7,33 +7,19 @@ import typer
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import easyupscaler
+from easyupscaler.cli.help_text import (
+    DENOISE_HELP,
+    DENOISE_SHORT_HELP,
+    SCALE_HELP,
+    SCALE_SHORT_HELP,
+    build_main_help,
+)
 from easyupscaler.cli.models import models_app
-
-ROOT_EPILOG = (
-    "Getting started:\n"
-    "  Import a model:   easyupscaler models import ~/Downloads/RealESRGAN_x4.pth\n"
-    "  Upscale images:   easyupscaler scale photo.jpg\n"
-    "  Denoise (no model needed): easyupscaler denoise photo image.jpg"
-)
-
-SCALE_EPILOG = (
-    "Examples:\n"
-    "  easyupscaler scale photo.jpg\n"
-    "  easyupscaler scale *.jpg --model RealESRGAN_x4plus\n"
-    "  easyupscaler scale *.jpg --output ./upscaled/"
-)
-
-DENOISE_EPILOG = (
-    "Examples:\n"
-    "  easyupscaler denoise photo image.jpg\n"
-    "  easyupscaler denoise art artwork.png --strength high\n"
-    "  easyupscaler denoise manga page*.png --output ./cleaned/"
-)
 
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    epilog=ROOT_EPILOG,
+    rich_markup_mode="markdown",
 )
 
 app.add_typer(models_app, name="models")
@@ -45,7 +31,7 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.callback()
+@app.callback(help=build_main_help(easyupscaler.__version__))
 def main(
     version: bool = typer.Option(
         False,
@@ -55,13 +41,10 @@ def main(
         help="Show version and exit.",
     ),
 ) -> None:
-    """Upscale and denoise images with AI super-resolution models.
-
-    scale requires an imported model. denoise downloads models automatically on first use.
-    """
+    pass
 
 
-@app.command("scale", no_args_is_help=True, epilog=SCALE_EPILOG)
+@app.command("scale", no_args_is_help=True, help=SCALE_HELP, short_help=SCALE_SHORT_HELP)
 def scale_command(
     paths: list[str] = typer.Argument(
         default=[],
@@ -80,18 +63,13 @@ def scale_command(
         help="Directory to write output files. Defaults to the same directory as the input.",
     ),
 ) -> None:
-    """Upscale images 2-4x with an imported super-resolution model.
-
-    Requires at least one imported model. Run 'models import' to add one,
-    or 'models list' to see what's available.
-    """
     from easyupscaler.cli.scale import run_scale
 
     output_dir = Path(output) if output is not None else None
     run_scale(paths, model=model, output_dir=output_dir)
 
 
-@app.command("denoise", no_args_is_help=True, epilog=DENOISE_EPILOG)
+@app.command("denoise", no_args_is_help=True, help=DENOISE_HELP, short_help=DENOISE_SHORT_HELP)
 def denoise_command(
     mode: str = typer.Argument(
         ...,
@@ -109,10 +87,7 @@ def denoise_command(
     strength: str = typer.Option(
         "low",
         "--strength",
-        help=(
-            "Denoising intensity: low (subtle, preserves detail) or high (aggressive). "
-            "[default: low]"
-        ),
+        help="Denoising intensity: low (subtle, preserves detail) or high (aggressive).",
     ),
     output: str | None = typer.Option(
         None,
@@ -121,10 +96,6 @@ def denoise_command(
         help="Directory to write output files. Defaults to the same directory as the input.",
     ),
 ) -> None:
-    """Reduce noise and compression artifacts from photos, art, or manga.
-
-    Models are selected automatically by mode and downloaded on first use.
-    """
     from easyupscaler.cli.denoise import run_denoise
 
     output_dir = Path(output) if output is not None else None
