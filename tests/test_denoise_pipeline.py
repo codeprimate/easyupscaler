@@ -40,6 +40,21 @@ def test_single_pass_photo_jpeg(isolated_paths, tmp_path: Path) -> None:
     assert backends["scunet_psnr"].calls == 1
 
 
+def test_run_writes_to_custom_output_dir(isolated_paths, tmp_path: Path) -> None:
+    source = tmp_path / "photo.jpg"
+    output_dir = tmp_path / "results"
+    _write_test_jpeg(source)
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+    )
+    results = service.run([source], "photo", "low", output_dir=output_dir)
+    assert results[0].error is None
+    assert results[0].output == output_dir / "photo-denoised.png"
+    assert results[0].output.exists()
+
+
 def test_two_pass_photo_heic(isolated_paths, tmp_path: Path) -> None:
     source = tmp_path / "photo.heic"
     source.write_bytes(b"placeholder")

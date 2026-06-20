@@ -85,6 +85,24 @@ def test_run_all_succeed(isolated_paths, tmp_path: Path) -> None:
     assert results[0].output is not None
 
 
+def test_run_writes_to_custom_output_dir(isolated_paths, tmp_path: Path) -> None:
+    models_dir = isolated_paths / "data" / "easyupscaler" / "models"
+    models_dir.mkdir(parents=True)
+    registry = ModelRegistry()
+    _seed_registry(registry, models_dir)
+    ConfigService().set_default_model("demo")
+
+    input_path = tmp_path / "input.jpg"
+    output_dir = tmp_path / "results"
+    Image.new("RGB", (4, 4), color=(128, 128, 128)).save(input_path, format="JPEG")
+
+    service = UpscaleService(registry=registry, backend_factory=lambda _: FakeBackend())
+    results = service.run([input_path], None, output_dir=output_dir)
+    assert results[0].error is None
+    assert results[0].output == output_dir / "input-upscaled.jpg"
+    assert results[0].output.exists()
+
+
 def test_missing_default_fails_before_backend(isolated_paths, tmp_path: Path) -> None:
     service = UpscaleService(registry=ModelRegistry(), backend_factory=lambda _: FakeBackend())
     with pytest.raises(ValueError, match="no default model set"):

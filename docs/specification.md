@@ -21,7 +21,7 @@ easyupscaler fills that gap: a single `easyupscaler` command that manages models
 
 #### 1. Scale command (upscale)
 
-`easyupscaler scale [--model <name>] <image> [<image> ...]`
+`easyupscaler scale [--model <name>] [--output DIR] <image> [<image> ...]`
 
 **Breaking change:** the bare invocation `easyupscaler <image>` no longer works. Use `easyupscaler scale` instead. Typer shows an error directing users to `scale` or `denoise`.
 
@@ -30,8 +30,10 @@ Full denoise command specification: [specification-denoise.md](./specification-d
 - Accepts one or more image paths as positional arguments
 - Shell expands glob patterns before the process starts; the CLI receives a flat list of paths
 - If `--model` is omitted, reads `default_model` from config; fails with a clear error if neither is set
+- Optional `--output DIR` / `-o DIR` writes all outputs under `DIR` (created if missing); see [ADR-016](./adr/016-optional-output-directory.md)
 - Processes images **sequentially** in argument order; continues on per-file failure
-- Writes `{stem}-upscaled.jpg` beside each input (same directory); if that file already exists, writes `{stem}-upscaled-NNNN.jpg` with the lowest available 4-digit index (`0001`, `0002`, …)
+- By default, writes `{stem}-upscaled.jpg` beside each input (same directory); with `--output`, writes under `DIR` instead
+- If the target `{stem}-upscaled.jpg` already exists in the output location, writes `{stem}-upscaled-NNNN.jpg` with the lowest available 4-digit index (`0001`, `0002`, …)
 - Exits `0` if all files succeeded; exits `1` if any file failed or no paths were given
 - Shows a Rich progress bar when stdout is a TTY; falls back to one plain status line per file when piped or redirected
 
@@ -143,6 +145,9 @@ RealESRGAN_x4plus   4×     RealESRGAN_x4plus.pth
 | Input file is a directory | Per-file failure: `photos/ FAILED: not a file`. Continue batch. |
 | Input is a corrupt/truncated image | Per-file failure: `corrupt.jpg FAILED: cannot read image`. Continue batch. |
 | Output directory is read-only | Per-file failure with OS error message. Continue batch. |
+| `--output` path is an existing file | Fail before inference: `Error: output path is not a directory: <path>`. Exit 1. |
+| `--output` path missing | Create directory with `mkdir -p`, then proceed. |
+| `--output` path not writable | Fail before inference: `Error: output directory is not writable: <path>`. Exit 1. |
 | `{stem}-upscaled.jpg` already exists | Write `{stem}-upscaled-NNNN.jpg` using the lowest available 4-digit index (`0001`–`9999`). Do not overwrite. |
 | Model not in registry at upscale time | Fail before inference: `Error: model 'foo' not found. Installed: ...` Exit 1. |
 | No default model and `--model` omitted | Fail before inference: `Error: no default model set. Run 'easyupscaler models default <name>'.` Exit 1. |
@@ -275,6 +280,8 @@ class UpscaleService:
         paths: list[Path],
         model_name: str | None,
         on_progress: Callable[[UpscaleResult], None] | None = None,
+        *,
+        output_dir: Path | None = None,
     ) -> list[UpscaleResult]: ...
 ```
 
@@ -288,8 +295,8 @@ class ImageIO:
     # Returns float32 RGB (H, W, 3) in [0, 1]; handles RGBA and grayscale
     # Raises ImageReadError on corrupt/unsupported files
 
-    def write(self, image: np.ndarray, source_path: Path) -> Path: ...
-    # Writes {stem}-upscaled.jpg beside source_path; on conflict, {stem}-upscaled-NNNN.jpg
+    def write(self, image: np.ndarray, source_path: Path, *, output_dir: Path | None = None) -> Path: ...
+    # Writes {stem}-upscaled.jpg beside source_path or under output_dir; on conflict, {stem}-upscaled-NNNN.jpg
     # quality=95, subsampling=0, convert to RGB first
     # Returns output path
 ```
@@ -531,7 +538,7 @@ install:
 
 ## Future Considerations (explicitly out of MVP)
 
-- `--tile-size`, `--tile-overlap`, `--output` flags
+- `--tile-size`, `--tile-overlap` flags
 - `models verify` — registry integrity check (detect missing weight files)
 - `--name` on `models import`
 - URL / remote model import

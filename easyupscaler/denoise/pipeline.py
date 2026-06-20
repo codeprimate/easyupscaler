@@ -50,6 +50,8 @@ class DenoiseService:
         strength: DenoiseStrength,
         on_progress: Callable[[DenoiseResult], None] | None = None,
         on_download_progress: DownloadProgressCallback | None = None,
+        *,
+        output_dir: Path | None = None,
     ) -> list[DenoiseResult]:
         batch_is_heic = any(is_heic_path(path) for path in paths)
         required_keys = resolve_models(mode, strength, is_heic=batch_is_heic)
@@ -61,7 +63,7 @@ class DenoiseService:
         results: list[DenoiseResult] = []
 
         for path in paths:
-            result = self._process_path(path, mode, strength)
+            result = self._process_path(path, mode, strength, output_dir=output_dir)
             results.append(result)
             if on_progress is not None:
                 on_progress(result)
@@ -74,6 +76,8 @@ class DenoiseService:
         path: Path,
         mode: DenoiseMode,
         strength: DenoiseStrength,
+        *,
+        output_dir: Path | None = None,
     ) -> DenoiseResult:
         if not path.exists():
             return DenoiseResult(path=path, output=None, error="file not found")
@@ -93,6 +97,7 @@ class DenoiseService:
                 path,
                 preserve_grayscale=preserve_grayscale,
                 was_grayscale=was_grayscale,
+                output_dir=output_dir,
             )
         except ImageReadError as exc:
             return DenoiseResult(path=path, output=None, error=str(exc))

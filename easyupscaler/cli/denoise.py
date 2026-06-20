@@ -24,6 +24,7 @@ def run_denoise(
     *,
     mode: str,
     strength: str,
+    output_dir: Path | None = None,
 ) -> None:
     if not paths:
         typer.echo(EMPTY_INPUT_ERROR, err=True)
@@ -36,6 +37,15 @@ def run_denoise(
     if strength not in VALID_STRENGTHS:
         typer.echo(f"Error: invalid strength '{strength}'. Choose low or high.", err=True)
         raise typer.Exit(code=1)
+
+    if output_dir is not None:
+        from easyupscaler.cli.output_dir import prepare_output_dir
+
+        try:
+            output_dir = prepare_output_dir(output_dir)
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from None
 
     ensure_heif_registered()
     resolved_paths = [Path(path) for path in paths]
@@ -111,6 +121,7 @@ def run_denoise(
             strength,  # type: ignore[arg-type]
             on_progress=on_progress,
             on_download_progress=download_callback,
+            output_dir=output_dir,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)

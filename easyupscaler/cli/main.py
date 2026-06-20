@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import typer
 
@@ -39,11 +40,18 @@ def main(
 def scale_command(
     paths: list[str] = typer.Argument(default=[]),
     model: str | None = typer.Option(None, "--model", help="Model name to use for upscaling."),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write outputs to this directory.",
+    ),
 ) -> None:
     """Upscale images with imported super-resolution models."""
     from easyupscaler.cli.scale import run_scale
 
-    run_scale(paths, model=model)
+    output_dir = Path(output) if output is not None else None
+    run_scale(paths, model=model, output_dir=output_dir)
 
 
 @app.command("denoise")
@@ -51,11 +59,18 @@ def denoise_command(
     mode: str = typer.Argument(..., help="Denoise mode: photo, art, or manga."),
     paths: list[str] = typer.Argument(default=[]),
     strength: str = typer.Option("low", "--strength", help="Denoise strength: low or high."),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write outputs to this directory.",
+    ),
 ) -> None:
     """Denoise images with automatically selected AI models."""
     from easyupscaler.cli.denoise import run_denoise
 
-    run_denoise(paths, mode=mode, strength=strength)
+    output_dir = Path(output) if output is not None else None
+    run_denoise(paths, mode=mode, strength=strength, output_dir=output_dir)
 
 
 def main_entry() -> int:

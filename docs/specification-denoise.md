@@ -14,7 +14,7 @@ All existing behavior, error messages, exit codes, and architectural constraints
 ### Command syntax
 
 ```
-easyupscaler scale [--model NAME] <image> [<image> ...]
+easyupscaler scale [--model NAME] [--output DIR] <image> [<image> ...]
 ```
 
 This replaces the bare `easyupscaler <files>` default command. All behavior is identical to the upscale command defined in `specification.md §1`, with the single change that `scale` is now an explicit subcommand.
@@ -32,13 +32,14 @@ This replaces the bare `easyupscaler <files>` default command. All behavior is i
 ### Command syntax
 
 ```
-easyupscaler denoise <mode> [--strength low|high] <image> [<image> ...]
+easyupscaler denoise <mode> [--strength low|high] [--output DIR] <image> [<image> ...]
 ```
 
 | Argument / flag | Values | Default | Notes |
 |-----------------|--------|---------|-------|
 | `<mode>` | `photo`, `art`, `manga` | Required | Controls model selection and output colorspace |
 | `--strength` | `low`, `high` | `low` | Controls which model variant is selected |
+| `--output` / `-o` | Directory path | (beside input) | Write all outputs under `DIR`; created if missing ([ADR-016](./adr/016-optional-output-directory.md)) |
 | `<image> ...` | One or more file paths | Required | Shell expands globs before invocation |
 
 **`--model` is not accepted.** Model selection is automatic, governed by `<mode>`, `--strength`, and input file format. Passing `--model` is an error.
@@ -47,7 +48,7 @@ easyupscaler denoise <mode> [--strength low|high] <image> [<image> ...]
 
 ### 2.1 Output conventions
 
-- Output is always **PNG** at full input resolution (1×): `{stem}-denoised.png` beside the input file.
+- Output is always **PNG** at full input resolution (1×): `{stem}-denoised.png` beside the input file, or under `--output DIR` when set.
 - This applies to all input formats including JPEG, HEIC, WebP, and PNG.
 - On conflict: `{stem}-denoised-NNNN.png` (lowest available 4-digit index, identical to ADR-011 pattern).
 - The `-upscaled` suffix is not used; `-denoised` is the canonical denoise suffix.
@@ -67,6 +68,8 @@ Model selection is determined at runtime by mode + strength + input format. The 
 | `photo` | `high` | non-HEIC | SCUNet GAN pass |
 | `photo` | `low` | HEIC | SCUNet PSNR pass → FBCNN pass (auto QF) |
 | `photo` | `high` | HEIC | SCUNet GAN pass → FBCNN pass (QF override ≈ 20) |
+
+**Photo strength note:** `--strength high` selects the GAN-trained SCUNet checkpoint, not a stronger pass of the same model. It targets heavy sensor noise. On already-clean phone JPEGs it often looks worse than `--strength low` (PSNR): fine speckle, color blotches, and synthetic texture in smooth areas (sky, skin, walls). Prefer `low` for typical camera JPEG exports; use `high` when the source is visibly noisy (high ISO, low light).
 | `art` | `low` | any | 1xDeJPG_realplksr_otf pass |
 | `art` | `high` | any | Archiver Medium pass |
 | `manga` | `low` | any | 1xDeJPG_realplksr_otf pass (colorspace-preserved) |
@@ -132,6 +135,8 @@ All URLs verified via HTTP HEAD (200 OK) on 2026-06-20. File sizes:
 - Always processed as RGB; grayscale inputs are converted to RGB for inference and written as RGB PNG.
 - HEIC inputs trigger a two-pass pipeline (§2.2).
 - Non-HEIC inputs (JPEG, PNG, WebP, etc.) use a single SCUNet pass.
+- **`--strength low` (default):** SCUNet PSNR — conservative denoise; best default for typical iPhone/camera JPEGs.
+- **`--strength high`:** SCUNet GAN — perceptual/GAN objective; can introduce visible GAN artifacts (speckle, chroma blotches, mottling in flat regions) on low-noise JPEGs where little real sensor noise remains. Intended for visibly noisy sources, not “higher quality” on every photo.
 
 #### `art` mode
 
@@ -232,6 +237,9 @@ The FBCNN `qf_input` value for `--strength high` is a named constant `FBCNN_HIGH
 | Corrupt / unreadable image | Per-file failure: `{path} FAILED: cannot read image`. Continue batch. |
 | HEIC file, pillow-heif not installed | Per-file failure with install instructions. Continue batch. |
 | Output directory is read-only | Per-file failure with OS error. Continue batch. |
+| `--output` path is an existing file | Fail before inference: `Error: output path is not a directory: <path>`. Exit 1. |
+| `--output` path missing | Create directory with `mkdir -p`, then proceed. |
+| `--output` path not writable | Fail before inference: `Error: output directory is not writable: <path>`. Exit 1. |
 | `{stem}-denoised.png` already exists | Write `{stem}-denoised-NNNN.png` (lowest available index). Never overwrite. |
 | Model download fails (network error) | Fail entire job before inference: `Error: could not download {filename}. Check your network or download manually from {url} and place in {models_dir}.` Exit 1. |
 | Model file corrupt after download | Delete the corrupt file, fail entire job: `Error: downloaded {filename} appears corrupt. Delete it and retry.` Exit 1. |

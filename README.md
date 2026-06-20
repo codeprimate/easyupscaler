@@ -25,7 +25,7 @@ easyupscaler is a single command that handles model import, defaults, batch runs
 - **Large images** — tiled inference with automatic tile-size reduction on out-of-memory
 - **Fully offline** — no internet access; all models are stored locally in standard XDG directories
 
-Output is always `{stem}-upscaled.jpg` beside each input, JPEG quality 95, 4:4:4 chroma subsampling. If that file already exists, the next run writes `{stem}-upscaled-0001.jpg`, then `-0002`, and so on. PNG inputs (including RGBA and grayscale) are converted to RGB.
+Output is always `{stem}-upscaled.jpg` beside each input by default (JPEG quality 95, 4:4:4 chroma subsampling). Use `--output DIR` or `-o DIR` to write all outputs under one directory instead. If that file already exists, the next run writes `{stem}-upscaled-0001.jpg`, then `-0002`, and so on. PNG inputs (including RGBA and grayscale) are converted to RGB.
 
 ## Requirements
 
@@ -78,6 +78,7 @@ Override the default for one run:
 
 ```bash
 easyupscaler scale --model RealESRGAN_x4plus scan.png print.png
+easyupscaler scale photo.jpg --output ./results
 ```
 
 ## Denoise
@@ -93,7 +94,9 @@ easyupscaler denoise art *.jpg
 easyupscaler denoise manga --strength high page.png
 ```
 
-Output is `{stem}-denoised.png` beside each input (PNG, lossless). HEIC photo mode runs a two-pass pipeline (SCUNet + FBCNN). See [docs/specification-denoise.md](docs/specification-denoise.md) for the full model selection matrix.
+Output is `{stem}-denoised.png` beside each input by default (PNG, lossless). Use `--output DIR` or `-o DIR` to write under one directory. HEIC photo mode runs a two-pass pipeline (SCUNet + FBCNN). See [docs/specification-denoise.md](docs/specification-denoise.md) for the full model selection matrix.
+
+**Photo strength:** `--strength low` (default) uses SCUNet PSNR and is the right choice for typical phone/camera JPEGs. `--strength high` switches to SCUNet GAN for heavy sensor noise; on already-clean JPEGs it can add visible speckle, color blotches, and synthetic texture in smooth areas — not “better,” just more aggressive.
 
 Batch via shell globs:
 
@@ -107,12 +110,13 @@ easyupscaler scale photos/*.jpg --model 4xUltrasharp
 ### Scale (upscale)
 
 ```
-easyupscaler scale [--model NAME] <image> [<image> ...]
+easyupscaler scale [--model NAME] [--output DIR] <image> [<image> ...]
 ```
 
 | Flag / arg | Description |
 |---|---|
 | `--model NAME` | Use this registry model instead of the configured default |
+| `--output`, `-o DIR` | Write all outputs to this directory (created if missing) |
 | `<image> ...` | One or more file paths (shell expands globs before the process starts) |
 
 Progress goes to stdout. Errors and warnings go to stderr. In a TTY you get a Rich progress bar and per-file ✓/✗ lines. When piped or redirected, output is one plain line per file.
@@ -122,13 +126,14 @@ Exit `0` when every file succeeds. Exit `1` on any failure, including an empty a
 ### Denoise
 
 ```
-easyupscaler denoise <mode> [--strength low|high] <image> [<image> ...]
+easyupscaler denoise <mode> [--strength low|high] [--output DIR] <image> [<image> ...]
 ```
 
 | Flag / arg | Description |
 |---|---|
 | `<mode>` | `photo`, `art`, or `manga` — selects models automatically |
-| `--strength` | `low` (default) or `high` |
+| `--strength` | `low` (default) or `high` — in photo mode, `high` is SCUNet GAN (noisy sources); `low` is SCUNet PSNR (typical JPEGs) |
+| `--output`, `-o DIR` | Write all outputs to this directory (created if missing) |
 | `<image> ...` | One or more file paths |
 
 Output is PNG at 1× resolution (`{stem}-denoised.png`). Denoise models download automatically on first use. Always loads PyTorch.
@@ -187,6 +192,7 @@ This mirrors patterns from ComfyUI and A1111, which also wrap Spandrel with thei
 | Slow on first run | PyTorch cold start is normal; later files in the same batch reuse the loaded model |
 | Out of memory | Tiling retries with smaller tiles automatically; very large images may still fail at the 128 px floor |
 | MPS unavailable | Inference falls back to CPU automatically |
+| Photo denoise looks speckled or blotchy at `--strength high` | Use `--strength low` (PSNR). GAN is for heavy noise; clean JPEGs often look worse |
 
 ## Development
 

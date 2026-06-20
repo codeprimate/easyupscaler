@@ -56,8 +56,14 @@ class ImageIO:
         pil_image = Image.fromarray(uint8_array, mode="RGB")
         pil_image.save(path, format="PNG")
 
-    def write(self, image: np.ndarray, source_path: Path) -> Path:
-        output_path = self._resolve_output_path(source_path)
+    def write(
+        self,
+        image: np.ndarray,
+        source_path: Path,
+        *,
+        output_dir: Path | None = None,
+    ) -> Path:
+        output_path = self._resolve_output_path(source_path, output_dir=output_dir)
         clamped = np.clip(image, 0.0, 1.0)
         uint8_array = (clamped * 255.0).round().astype(np.uint8)
         pil_image = Image.fromarray(uint8_array, mode="RGB")
@@ -75,8 +81,9 @@ class ImageIO:
         source_path: Path,
         *,
         mode: str = "RGB",
+        output_dir: Path | None = None,
     ) -> Path:
-        output_path = self._resolve_denoise_output_path(source_path)
+        output_path = self._resolve_denoise_output_path(source_path, output_dir=output_dir)
         clamped = np.clip(image, 0.0, 1.0)
         if mode == "L":
             if image.ndim == 3 and image.shape[2] == 3:
@@ -102,25 +109,43 @@ class ImageIO:
         *,
         preserve_grayscale: bool,
         was_grayscale: bool,
+        output_dir: Path | None = None,
     ) -> Path:
         if preserve_grayscale and was_grayscale:
-            return self.write_png(image, source_path, mode="L")
-        return self.write_png(image, source_path, mode="RGB")
+            return self.write_png(
+                image,
+                source_path,
+                mode="L",
+                output_dir=output_dir,
+            )
+        return self.write_png(image, source_path, mode="RGB", output_dir=output_dir)
 
-    def _resolve_denoise_output_path(self, source_path: Path) -> Path:
+    def _resolve_denoise_output_path(
+        self,
+        source_path: Path,
+        *,
+        output_dir: Path | None = None,
+    ) -> Path:
         return self._resolve_indexed_output_path(
             source_path,
             base_suffix=DENOISE_OUTPUT_SUFFIX,
             indexed_stem_suffix="-denoised",
             extension=".png",
+            output_dir=output_dir,
         )
 
-    def _resolve_output_path(self, source_path: Path) -> Path:
+    def _resolve_output_path(
+        self,
+        source_path: Path,
+        *,
+        output_dir: Path | None = None,
+    ) -> Path:
         return self._resolve_indexed_output_path(
             source_path,
             base_suffix=OUTPUT_SUFFIX,
             indexed_stem_suffix="-upscaled",
             extension=".jpg",
+            output_dir=output_dir,
         )
 
     def _resolve_indexed_output_path(
@@ -130,8 +155,11 @@ class ImageIO:
         base_suffix: str,
         indexed_stem_suffix: str,
         extension: str,
+        output_dir: Path | None = None,
     ) -> Path:
-        parent = source_path.parent
+        parent = output_dir if output_dir is not None else source_path.parent
+        if output_dir is not None:
+            parent.mkdir(parents=True, exist_ok=True)
         stem = source_path.stem
         base_path = parent / f"{stem}{base_suffix}"
         if not base_path.exists():

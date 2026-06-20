@@ -73,7 +73,7 @@ The MVP succeeds when:
 - ncnn-vulkan or additional inference backends
 - In-app glob expansion or recursive directory walks
 - Parallel batch workers
-- Custom output formats, quality settings, or destination directories (fixed JPEG contract for MVP)
+- Custom output formats or quality settings (optional `--output` directory is supported; see [ADR-016](./adr/016-optional-output-directory.md))
 
 ## Related documents
 

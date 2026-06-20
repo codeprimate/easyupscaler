@@ -13,10 +13,24 @@ EMPTY_INPUT_ERROR = "Error: no input images. Pass one or more file paths."
 COMPLETED_SUMMARY_TEMPLATE = "Completed: {succeeded} succeeded, {failed} failed in {elapsed}."
 
 
-def run_scale(paths: list[str], *, model: str | None) -> None:
+def run_scale(
+    paths: list[str],
+    *,
+    model: str | None,
+    output_dir: Path | None = None,
+) -> None:
     if not paths:
         typer.echo(EMPTY_INPUT_ERROR, err=True)
         raise typer.Exit(code=1)
+
+    if output_dir is not None:
+        from easyupscaler.cli.output_dir import prepare_output_dir
+
+        try:
+            output_dir = prepare_output_dir(output_dir)
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from None
 
     ensure_heif_registered()
     resolved_paths = [Path(path) for path in paths]
@@ -50,7 +64,12 @@ def run_scale(paths: list[str], *, model: str | None) -> None:
 
     try:
         started_at = time.perf_counter()
-        results = service.run(resolved_paths, model, on_progress=on_progress)
+        results = service.run(
+            resolved_paths,
+            model,
+            on_progress=on_progress,
+            output_dir=output_dir,
+        )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None

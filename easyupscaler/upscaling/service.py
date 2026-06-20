@@ -41,6 +41,8 @@ class UpscaleService:
         paths: list[Path],
         model_name: str | None,
         on_progress: Callable[[UpscaleResult], None] | None = None,
+        *,
+        output_dir: Path | None = None,
     ) -> list[UpscaleResult]:
         resolved_name = model_name or self._config.get_default_model()
         if resolved_name is None:
@@ -58,7 +60,7 @@ class UpscaleService:
         results: list[UpscaleResult] = []
 
         for path in paths:
-            result = self._process_path(path, backend)
+            result = self._process_path(path, backend, output_dir=output_dir)
             results.append(result)
             if on_progress is not None:
                 on_progress(result)
@@ -66,7 +68,13 @@ class UpscaleService:
 
         return results
 
-    def _process_path(self, path: Path, backend: UpscalerBackend) -> UpscaleResult:
+    def _process_path(
+        self,
+        path: Path,
+        backend: UpscalerBackend,
+        *,
+        output_dir: Path | None = None,
+    ) -> UpscaleResult:
         if not path.exists():
             return UpscaleResult(path=path, output=None, error="file not found")
         if not path.is_file():
@@ -75,7 +83,7 @@ class UpscaleService:
         try:
             image = self._image_io.read(path)
             upscaled = backend.upscale(image)
-            output = self._image_io.write(upscaled, path)
+            output = self._image_io.write(upscaled, path, output_dir=output_dir)
         except ImageReadError as exc:
             return UpscaleResult(path=path, output=None, error=str(exc))
         except OSError as exc:

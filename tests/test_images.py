@@ -98,6 +98,37 @@ def test_write_fills_lowest_available_index(tmp_path: Path) -> None:
     assert output.name == "photo-upscaled-0001.jpg"
 
 
+def test_write_uses_custom_output_dir(tmp_path: Path) -> None:
+    source = tmp_path / "inputs" / "photo.jpg"
+    source.parent.mkdir()
+    _write_rgb_jpeg(source)
+    output_dir = tmp_path / "results"
+    image = ImageIO().read(source)
+
+    output = ImageIO().write(image, source, output_dir=output_dir)
+
+    assert output == output_dir / f"photo{OUTPUT_SUFFIX}"
+    assert output.exists()
+    assert not (source.parent / f"photo{OUTPUT_SUFFIX}").exists()
+
+
+def test_write_conflict_indexing_uses_custom_output_dir(tmp_path: Path) -> None:
+    source = tmp_path / "photo.jpg"
+    _write_rgb_jpeg(source)
+    output_dir = tmp_path / "results"
+    image = ImageIO().read(source)
+    image_io = ImageIO()
+
+    (output_dir / f"photo{OUTPUT_SUFFIX}").parent.mkdir(parents=True, exist_ok=True)
+    (output_dir / f"photo{OUTPUT_SUFFIX}").write_bytes(b"existing")
+
+    output = image_io.write(image, source, output_dir=output_dir)
+
+    assert output.name == "photo-upscaled-0001.jpg"
+    assert output.parent == output_dir
+    assert not (source.parent / "photo-upscaled-0001.jpg").exists()
+
+
 def test_write_png_uses_denoised_suffix(tmp_path: Path) -> None:
     source = tmp_path / "photo.jpg"
     _write_rgb_jpeg(source)

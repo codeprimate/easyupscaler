@@ -41,7 +41,7 @@ def test_non_tty_denoise_output(
     image.write_bytes(b"image")
     output = tmp_path / "input-denoised.png"
 
-    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None):
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
         result = DenoiseResult(path=image, output=output, error=None)
         if on_progress:
             on_progress(result)
@@ -67,7 +67,7 @@ def test_partial_failure_exit_one(
     bad = tmp_path / "bad.jpg"
     good.write_bytes(b"image")
 
-    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None):
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
         results = [
             DenoiseResult(path=bad, output=None, error="file not found"),
             DenoiseResult(path=good, output=tmp_path / "good-denoised.png", error=None),
@@ -96,7 +96,7 @@ def test_download_failure_exit_one(
     image = tmp_path / "input.jpg"
     image.write_bytes(b"image")
 
-    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None):
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
         raise ValueError(
             "Error: could not download scunet_color_real_psnr.pth. Check your network."
         )
@@ -109,3 +109,79 @@ def test_download_failure_exit_one(
     result = runner.invoke(app, ["denoise", "photo", str(image)])
     assert result.exit_code == 1
     assert "could not download" in result.stderr
+
+
+def test_output_flag_forwards_to_service(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = tmp_path / "input.jpg"
+    image.write_bytes(b"image")
+    output_dir = tmp_path / "results"
+    captured: dict[str, Path | None] = {}
+
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
+        captured["output_dir"] = kwargs.get("output_dir")
+        return []
+
+    monkeypatch.setattr(
+        "easyupscaler.cli.denoise.DenoiseService",
+        lambda: MagicMock(run=fake_run),
+    )
+
+    result = runner.invoke(app, ["denoise", "photo", str(image), "--output", str(output_dir)])
+    assert result.exit_code == 0
+    assert captured["output_dir"] == output_dir
+    assert output_dir.is_dir()
+
+
+def test_short_output_flag_forwards_to_service(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = tmp_path / "input.jpg"
+    image.write_bytes(b"image")
+    output_dir = tmp_path / "results"
+    captured: dict[str, Path | None] = {}
+
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
+        captured["output_dir"] = kwargs.get("output_dir")
+        return []
+
+    monkeypatch.setattr(
+        "easyupscaler.cli.denoise.DenoiseService",
+        lambda: MagicMock(run=fake_run),
+    )
+
+    result = runner.invoke(app, ["denoise", "photo", str(image), "-o", str(output_dir)])
+    assert result.exit_code == 0
+    assert captured["output_dir"] == output_dir
+
+
+def test_output_path_is_file_exit_one_before_service(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = tmp_path / "input.jpg"
+    image.write_bytes(b"image")
+    output_file = tmp_path / "results"
+    output_file.write_bytes(b"not-a-directory")
+    service_called = False
+
+    def fake_run(*args, **kwargs):
+        nonlocal service_called
+        service_called = True
+        return []
+
+    monkeypatch.setattr(
+        "easyupscaler.cli.denoise.DenoiseService",
+        lambda: MagicMock(run=fake_run),
+    )
+
+    result = runner.invoke(app, ["denoise", "photo", str(image), "--output", str(output_file)])
+    assert result.exit_code == 1
+    assert "output path is not a directory" in result.stderr
+    assert service_called is False

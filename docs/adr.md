@@ -19,3 +19,4 @@ Index of accepted decisions for easyupscaler MVP. Each ADR is immutable once acc
 | [013](./adr/013-denoise-png-output.md) | PNG output for denoise command | Accepted |
 | [014](./adr/014-heic-two-pass-denoise.md) | Two-pass denoise pipeline for HEIC photo inputs | Accepted |
 | [015](./adr/015-heic-pillow-heif.md) | HEIC support via required pillow-heif dependency | Accepted |
+| [016](./adr/016-optional-output-directory.md) | Optional output directory via `--output` / `-o` | Accepted |

@@ -182,7 +182,7 @@ Orchestrates a multi-file job ([ADR-006](./adr/006-batch-processing-and-exit-cod
 4. For each input path sequentially:
    - Read image via `ImageIO`
    - Call `backend.upscale(image)` (tiled internally — [ADR-007](./adr/007-tiled-inference.md))
-   - Write `{stem}-upscaled.jpg` beside input ([ADR-003](./adr/003-image-output-conventions.md))
+   - Write `{stem}-upscaled.jpg` beside input, or under optional `--output DIR` ([ADR-003](./adr/003-image-output-conventions.md), [ADR-016](./adr/016-optional-output-directory.md))
    - Record success or failure; continue on failure
    - On MPS: optionally `torch.mps.empty_cache()` after large images
 5. Print summary; return overall success boolean
@@ -218,7 +218,9 @@ Spandrel does **not** convert PIL/NumPy to tensors or implement tiling — that 
 - Input: PNG and JPEG via Pillow → RGB `numpy` float `[0, 1]`
 - Output: always JPEG, `quality=95`, `subsampling=0` ([ADR-003](./adr/003-image-output-conventions.md))
 - RGBA PNG: convert to RGB before save
-- Naming: `{input_stem}-upscaled.jpg` beside input; on conflict, `{input_stem}-upscaled-NNNN.jpg` ([ADR-003](./adr/003-image-output-conventions.md), [ADR-011](./adr/011-output-conflict-indexing.md))
+- Naming: `{input_stem}-upscaled.jpg` beside input (default) or under optional `output_dir` ([ADR-016](./adr/016-optional-output-directory.md)); on conflict, `{input_stem}-upscaled-NNNN.jpg` ([ADR-003](./adr/003-image-output-conventions.md), [ADR-011](./adr/011-output-conflict-indexing.md))
+- `write()`, `write_png()`, and `write_denoised()` accept optional `output_dir: Path | None`
+- When `output_dir` is set, ensures the directory exists before resolving indexed filenames
 - Indexed suffix when base output exists; never overwrite without prompt
 
 ## Data flow
@@ -432,3 +434,4 @@ Linux CI uses mocked backend. MPS tests are manual or optional slow markers.
 | [013](./adr/013-denoise-png-output.md) | PNG output for denoise command |
 | [014](./adr/014-heic-two-pass-denoise.md) | Two-pass HEIC photo denoise |
 | [015](./adr/015-heic-pillow-heif.md) | Required pillow-heif for HEIC |
+| [016](./adr/016-optional-output-directory.md) | Optional `--output` / `-o` directory |
