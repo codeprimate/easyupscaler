@@ -24,7 +24,7 @@ All other flags and positional arguments are unchanged. `document` mode behaves 
 
 ### 2.1 Purpose
 
-`document` mode is optimized for scans and photos of text: printed pages, handwritten notes, receipts, whiteboards, and book pages. It removes background stains, compression artifacts, paper texture, and color bleed, then applies adaptive contrast enhancement to push the result toward high-contrast grayscale.
+`document` mode is optimized for scans and photos of text: printed pages, handwritten notes, receipts, whiteboards, and book pages. Archiver Medium removes grain and compression artifacts; CPU post-processing (Sauvola binarization, morph cleanup, edge anti-aliasing) produces high-contrast grayscale optimized for readability.
 
 The output is a clean grayscale PNG. It is **not** a hard 1-bit binary image — gray values are preserved to maintain smooth strokes and avoid pixel-level harshness at low-resolution edges. This makes the output legible both on screen and as OCR input.
 
@@ -38,7 +38,7 @@ Identical to all `denoise` modes (§2.1 of `specification-denoise.md`):
 
 - Output is always **PNG** at full input resolution (1×), named `{stem}-denoised.png`.
 - Output is always written as **grayscale** (mode `L`), regardless of input colorspace.
-- Color and RGBA inputs are converted to grayscale before inference (see §2.5).
+- Color and RGBA inputs are converted to **RGB** for inference; output is always written as grayscale PNG after post-processing.
 - On conflict: `{stem}-denoised-NNNN.png` (lowest available 4-digit index).
 
 ---
@@ -49,8 +49,8 @@ Identical to all `denoise` modes (§2.1 of `specification-denoise.md`):
 
 | Mode       | Strength | Pipeline |
 |------------|----------|----------|
-| `document` | `low`    | Archiver Medium → Sauvola binarize (window 75) → anti-alias (σ 1.5) |
-| `document` | `high`   | Archiver Medium → Sauvola binarize (window 25) → anti-alias (σ 0.75) |
+| `document` | `low`    | Archiver Medium → Sauvola binarize (window 75) → morph cleanup → edge anti-alias (σ 1.5) → flat snap |
+| `document` | `high`   | Archiver Medium → Sauvola binarize (window 25) → morph cleanup → edge anti-alias (σ 0.75) → flat snap |
 
 **Rationale for single AI pass:**
 - **Archiver Medium** removes general grain, scan film, and compression artifacts without the aggressive binarization that destroys faint text on camera captures.
@@ -58,7 +58,7 @@ Identical to all `denoise` modes (§2.1 of `specification-denoise.md`):
 
 Inference runs on RGB. Grayscale conversion happens after the AI pass (see §2.5).
 
-See [ADR-019](./adr/019-document-binarize-antialias.md) (supersedes ADR-018).
+See [ADR-019](./adr/019-document-binarize-antialias.md) (supersedes ADR-018) and [ADR-020](./adr/020-document-postprocessing-refinements.md) (post-processing detail).
 
 ---
 
@@ -76,12 +76,14 @@ Document mode uses the existing `archivist_medium` entry. A `book_compact` entry
 2. Flatten alpha to white background if RGBA.
 3. Convert to **RGB** (required by Archiver Medium, which is trained on RGB data).
 4. Run Archiver Medium pass → RGB tensor output.
-5. Convert the RGB tensor to **grayscale** (`L` mode via standard luminance weights).
+5. Convert the RGB tensor to **grayscale** (`uint8` via standard luminance weights).
 6. Sauvola adaptive binarization → 1-bit mask (§2.6).
-7. Gaussian anti-alias the mask → smooth grayscale array.
-8. Write as grayscale PNG.
+7. Morphological open/close on the mask (speckle removal).
+8. Edge-only Gaussian anti-alias → smooth grayscale at stroke boundaries.
+9. Flat-region snap → force uniform ink/paper areas to pure black/white.
+10. Write as grayscale PNG.
 
-Color information carries no useful signal for text readability and is discarded after inference. Converting to grayscale after (not before) the AI passes avoids inference on single-channel input that the RGB-trained models do not expect.
+Color information carries no useful signal for text readability and is discarded during post-processing. Converting to grayscale after (not before) the AI pass avoids inference on single-channel input that the RGB-trained Archiver model does not expect.
 
 ---
 
@@ -92,7 +94,7 @@ After the AI pass and grayscale conversion, the pipeline binarizes with Sauvola 
 **Algorithm:**
 
 ```python
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import binary_closing, binary_opening, distance_transform_edt, gaussian_filter
 from skimage.filters import threshold_sauvola
 import numpy as np
 
@@ -104,8 +106,11 @@ def enhance_document_contrast(
     thresh = threshold_sauvola(gray, window_size=window, k=k)
     binary = (gray.astype(np.float32) >= thresh).astype(np.float32)
     binary = morphological_open_close(binary)
-    smoothed = antialias_edges_only(binary, sigma=sigma)
-    return snap_flat_regions(smoothed)
+    edge_band = distance_to_nearest_boundary(binary) <= DOCUMENT_EDGE_BAND_WIDTH
+    smoothed = gaussian_filter(binary, sigma=sigma)
+    result = binary.copy()
+    result[edge_band] = smoothed[edge_band]
+    return snap_flat_regions(result)
 ```
 
 Pixels ≥ local Sauvola threshold map to `1.0` (paper/background). Pixels below map to `0.0` (ink/text). Morphological cleanup removes isolated speckle. Gaussian blur applies only within `DOCUMENT_EDGE_BAND_WIDTH` pixels of a stroke boundary — flat paper and ink regions stay pure. Flat-region snap forces remaining values ≤ `DOCUMENT_FLAT_INK_SNAP` to `0.0` and ≥ `DOCUMENT_FLAT_PAPER_SNAP` to `1.0`.
@@ -144,7 +149,7 @@ Pixels ≥ local Sauvola threshold map to `1.0` (paper/background). Pixels below
 "scikit-image>=0.22",
 ```
 
-`scikit-image` pulls in `scipy` and `imageio` as transitive dependencies. Both are standard scientific Python packages acceptable for this project's dependency profile.
+`scikit-image` pulls in `scipy` and `imageio` as transitive dependencies. Document mode also calls `scipy.ndimage` directly for morphological cleanup, distance transform, and Gaussian filtering ([ADR-020](./adr/020-document-postprocessing-refinements.md)). Both are standard scientific Python packages acceptable for this project's dependency profile.
 
 No optional extra is introduced. There is no install-time gating for this feature.
 
@@ -172,7 +177,7 @@ scan.jpg → scan-denoised.png
 notes.heic → notes-denoised.png
 ```
 
-Two-pass note is not shown for `document` mode in TTY output (unlike HEIC photo mode). The two AI passes are an implementation detail, not a user-visible distinction.
+Document mode uses a single AI pass; no multi-pass note appears in TTY output (unlike HEIC photo mode).
 
 ---
 
@@ -193,39 +198,39 @@ The minimum image dimension for `--strength low` is 75 px (the Sauvola window si
 
 ---
 
-## 3. Decisions deferred to ADR
+## 3. Architecture decisions
 
 | Topic | ADR |
 |-------|-----|
-| `scikit-image` as hard runtime dependency | ADR-017 |
-| Document pipeline (Archiver + Sauvola binarize + anti-alias) | ADR-019 (supersedes ADR-018) |
-
-These ADRs must be written and accepted before implementation begins.
+| `scikit-image` as hard runtime dependency | [ADR-017](./adr/017-scikit-image-dependency.md) |
+| Single AI pass; Sauvola binarize + anti-alias | [ADR-019](./adr/019-document-binarize-antialias.md) (supersedes ADR-018) |
+| Morph cleanup, edge-only anti-alias, flat snap | [ADR-020](./adr/020-document-postprocessing-refinements.md) |
 
 ---
 
 ## 4. Affected components
 
-Extensions to the existing denoise module layout defined in `specification-denoise.md §2.11`:
+Extensions to the existing denoise module ([specification-denoise.md §2.11](./specification-denoise.md)):
 
 ```
 easyupscaler/
   denoise/
-    catalog.py          # add book_compact entry (filename, URL, architecture notes)
-    pipeline.py         # add DocumentDenoiseService: two AI passes + Sauvola step
-    document_constants.py   # DOCUMENT_SAUVOLA_WINDOW_LOW/HIGH, _K, CONTRAST_FACTOR_LOW/HIGH
+    catalog.py              # DenoiseMode "document"; book_compact catalog entry (unused)
+    document_constants.py   # Sauvola, anti-alias, morph, snap constants
+    document_enhance.py     # enhance_document_contrast(): binarize + post-process
+    pipeline.py             # DenoiseService: document branch after _run_passes
     backends/
-      book_compact_backend.py   # BookCompactBackend: Compact arch via Spandrel
-  io/
-    images.py           # extend with: rgb_to_grayscale(), grayscale PIL→numpy round-trip
+      book_compact_backend.py   # catalog/backend only; not invoked by document mode
+  cli/
+    denoise.py              # VALID_MODES includes "document"
 tests/
-  test_denoise_document_pipeline.py
-  test_cli_denoise_document.py
+  test_denoise_catalog.py   # resolve_models("document", ...)
+  test_denoise_document.py  # enhance_document_contrast unit tests
+  test_denoise_pipeline.py  # document mode integration via DenoiseService
+  test_cli_denoise.py       # document mode CLI routing
 ```
 
-`DocumentDenoiseService` is injected with backend factories for `ArchiverBackend` and `BookCompactBackend`, and a contrast-enhancement callable, following the same dependency injection pattern as `UpscaleService` and the existing denoise services.
-
-No new CLI changes are required beyond registering `document` as a valid mode value in `easyupscaler/cli/denoise.py`. The existing mode enum and routing logic extend naturally.
+Document mode extends the existing `DenoiseService` — no separate service class. When `mode == "document"`, `_process_path` calls `enhance_document_contrast` on Archiver output and writes via `ImageIO.write_png(..., mode="L")`.
 
 No new config keys in `config.toml`.
 

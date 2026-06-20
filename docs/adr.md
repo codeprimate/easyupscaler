@@ -23,3 +23,4 @@ Index of accepted decisions for easyupscaler MVP. Each ADR is immutable once acc
 | [017](./adr/017-scikit-image-dependency.md) | scikit-image as hard runtime dependency for document mode | Accepted |
 | [018](./adr/018-document-two-pass-pipeline.md) | Two-pass AI pipeline for document denoise mode | Superseded by [019](./adr/019-document-binarize-antialias.md) |
 | [019](./adr/019-document-binarize-antialias.md) | Document mode: Archiver + Sauvola binarize + anti-alias | Accepted |
+| [020](./adr/020-document-postprocessing-refinements.md) | Document post-processing: morph, edge-only AA, flat snap | Accepted |

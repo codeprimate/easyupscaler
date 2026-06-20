@@ -309,10 +309,10 @@ easyupscaler/
     import_model.py           # local file import (lazy torch)
   denoise/
     catalog.py                # managed model catalog and selection matrix
-    document_constants.py     # Sauvola window/contrast constants for document mode
-    document_enhance.py       # Sauvola binarize + Gaussian anti-alias
+    document_constants.py     # Sauvola, morph, anti-alias, flat-snap constants
+    document_enhance.py       # enhance_document_contrast: binarize + post-process
     downloader.py             # auto-download denoise weights
-    pipeline.py               # DenoiseService
+    pipeline.py               # DenoiseService (document branch in _process_path)
     backends/
       base.py                 # DenoiseBackend protocol
       spandrel_common.py      # shared Spandrel load/device/tiling
@@ -320,7 +320,7 @@ easyupscaler/
       fbcnn_backend.py
       dejpg_backend.py
       archiver_backend.py
-      book_compact_backend.py # Compact arch for document mode
+      book_compact_backend.py # catalog/backend only; not used by document mode
   upscaling/
     service.py                # UpscaleService
     tiling.py                 # tiled inference
@@ -441,3 +441,4 @@ Linux CI uses mocked backend. MPS tests are manual or optional slow markers.
 | [017](./adr/017-scikit-image-dependency.md) | scikit-image hard dep for document mode Sauvola |
 | [018](./adr/018-document-two-pass-pipeline.md) | Two-pass AI pipeline for document denoise | Superseded by 019 |
 | [019](./adr/019-document-binarize-antialias.md) | Document mode: Archiver + Sauvola binarize + anti-alias |
+| [020](./adr/020-document-postprocessing-refinements.md) | Document post-processing: morph, edge-only AA, flat snap |

@@ -116,6 +116,8 @@ For **photo** mode, strength matters:
 
 For **art** and **manga**, `low` is lighter cleanup; `high` is more aggressive on compression artifacts.
 
+For **document**, output is always grayscale PNG. `low` (default) suits clean scans and camera shots; `high` tightens local thresholding for faint ink or aged paper. Details: [specification-document-mode.md](docs/specification-document-mode.md).
+
 **HEIC (iPhone photos):** Photo mode runs two passes automatically — noise removal, then compression cleanup. Strength controls how aggressive the first pass is.
 
 Denoise requires network access **only** the first time each model is needed. After download, runs are offline like upscale.

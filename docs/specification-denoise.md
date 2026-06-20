@@ -76,7 +76,7 @@ Model selection is determined at runtime by mode + strength + input format. The 
 | `manga` | `high` | any | Archiver Medium pass (colorspace-preserved) |
 | `document` | `low` / `high` | any | Archiver Medium → Sauvola binarize → anti-alias (see [specification-document-mode.md](./specification-document-mode.md)) |
 
-**Document mode:** For full behavior (two-pass AI pipeline, Sauvola post-processing, grayscale output), see [specification-document-mode.md](./specification-document-mode.md).
+**Document mode:** For full behavior (single AI pass, Sauvola post-processing, grayscale output), see [specification-document-mode.md](./specification-document-mode.md).
 
 **HEIC two-pass rationale:** iPhone HEIC files carry sensor noise (ISO grain) plus potential compression artifacts. SCUNet removes sensor noise first; FBCNN then cleans any residual compression artifacts introduced by the HEIC encode or downstream processing. Both passes are always applied to HEIC regardless of strength; strength controls which SCUNet variant and FBCNN aggressiveness.
 
@@ -118,6 +118,7 @@ Downloading scunet_color_real_psnr.pth...
 - `fbcnn_color.pth` — `https://github.com/jiaxi-jiang/FBCNN/releases/download/v1.0/fbcnn_color.pth`
 - `1xDeJPG_realplksr_otf.safetensors` — `https://github.com/Phhofm/models/releases/download/1xDeJPG_realplksr_otf/1xDeJPG_realplksr_otf.safetensors`
 - `1x-Archivist_Medium.pth` — `https://github.com/Loganavter/Archivist-Project-Denoiser/releases/download/v1.0/1x-Archivist_Medium.pth`
+- `1xBook-Compact.safetensors` — `https://github.com/starinspace/StarinspaceUpscale/releases/download/Models/1xBook-Compact.safetensors` (catalog only; not downloaded by document mode)
 
 All URLs verified via HTTP HEAD (200 OK) on 2026-06-20. File sizes:
 
@@ -128,6 +129,7 @@ All URLs verified via HTTP HEAD (200 OK) on 2026-06-20. File sizes:
 | `fbcnn_color.pth` | ~274.6 MB |
 | `1xDeJPG_realplksr_otf.safetensors` | ~28.1 MB |
 | `1x-Archivist_Medium.pth` | ~1.3 MB |
+| `1xBook-Compact.safetensors` | ~2.3 MB (catalog only) |
 
 ---
 
@@ -155,6 +157,13 @@ All URLs verified via HTTP HEAD (200 OK) on 2026-06-20. File sizes:
 - Model selection is identical to `art` mode.
 - **Colorspace is preserved:** if the input is grayscale, run inference on an RGB version (convert → infer → convert back), then write grayscale PNG. If the input is color (RGB), write color PNG. This matches how readers expect manga output: BW originals stay BW.
 - Archiver Medium at `--strength high` targets the scan-restoration use case (film grain, physical artifacts, 720p–1080p source).
+
+#### `document` mode
+
+- Optimized for scanned or photographed text. Single Archiver Medium AI pass, then CPU post-processing (Sauvola binarization, morph cleanup, edge anti-alias, flat-region snap).
+- Output is always grayscale PNG regardless of input colorspace.
+- `--strength` controls Sauvola window size and anti-alias sigma, not the AI model.
+- Full specification: [specification-document-mode.md](./specification-document-mode.md).
 
 ---
 
@@ -207,7 +216,7 @@ Identical to the upscale command (ADR-006):
   ```
   photo.heic FAILED: HEIC support requires pillow-heif. Install with: pip install easyupscaler[heic]
   ```
-- HEIC inputs are valid in all three modes, but only `photo` mode triggers the two-pass pipeline. In `art` and `manga` modes, HEIC is treated as any other input format (single pass).
+- HEIC inputs are valid in all modes. Only `photo` mode triggers the SCUNet + FBCNN two-pass pipeline. `art`, `manga`, and `document` treat HEIC as any other input (single AI pass).
 
 ---
 
@@ -266,17 +275,21 @@ easyupscaler/
     scale.py                 # renamed from upscale.py; subcommand changed from default to `scale`
   denoise/
     catalog.py               # DENOISE_MODEL_CATALOG: names, filenames, URLs, required for which mode/strength
+    document_constants.py    # document mode post-processing constants
+    document_enhance.py      # enhance_document_contrast(): Sauvola binarize + post-process
     downloader.py            # download_model(key): fetch + verify + save; progress callback
-    pipeline.py              # DenoiseService: single-pass and two-pass orchestration
+    pipeline.py              # DenoiseService: single-pass, two-pass (photo HEIC), document branch
     backends/
       scunet_backend.py      # SCUNetBackend: load + forward via Spandrel
       fbcnn_backend.py       # FBCNNBackend: load + forward with optional qf_input override
       dejpg_backend.py       # DeJPGBackend: RealPLKSR model via Spandrel
       archiver_backend.py    # ArchiverBackend: ESRGAN model via Spandrel
+      book_compact_backend.py # catalog/backend only; not used by document mode
   io/
     images.py                # extend with: HEIC detection, grayscale round-trip, PNG write
 tests/
   test_denoise_catalog.py
+  test_denoise_document.py   # document mode post-processing unit tests
   test_denoise_downloader.py
   test_denoise_pipeline.py
   test_cli_denoise.py
@@ -288,6 +301,8 @@ tests/
 **`DenoiseService`** is injected with backend factories (not constructed internally), following the same dependency injection pattern as `UpscaleService`.
 
 **`ImageIO.write_png`** is a new write method alongside the existing `write` (JPEG). It follows the same conflict-indexing logic but writes PNG and appends `-denoised` rather than `-upscaled`.
+
+**Document mode** extends `DenoiseService._process_path` and adds `document_enhance.py`. Full behavior: [specification-document-mode.md](./specification-document-mode.md). ADRs: [017](./adr/017-scikit-image-dependency.md), [019](./adr/019-document-binarize-antialias.md), [020](./adr/020-document-postprocessing-refinements.md).
 
 **No new config keys** in `config.toml`. Denoise has no user-configurable defaults beyond the CLI flags.
 
