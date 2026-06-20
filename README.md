@@ -9,6 +9,8 @@ easyupscaler photo.png
 # → photo-upscaled.jpg
 ```
 
+> **Platform:** easyupscaler is tested only on **Apple Silicon Mac** (macOS with MPS). Linux, Windows, and Intel Mac are unsupported here — they may work, but are not verified.
+
 ## Why this exists
 
 Tools like ComfyUI, A1111, and Upscayl are built around larger products or desktop apps. If you already have a `.pth` or `.safetensors` upscaler and want to run it against local files from a script, you usually end up wiring PyTorch, Spandrel, tiling, and device selection yourself.
@@ -21,8 +23,7 @@ easyupscaler is a single command that handles model import, defaults, batch runs
 - **Community weights, unchanged** — import `.pth` and `.safetensors` files that work in ComfyUI and [OpenModelDB](https://openmodeldb.info/)
 - **Batch-friendly** — pass multiple paths or shell globs; exit code `1` if any file fails
 - **Large images** — tiled inference with automatic tile-size reduction on out-of-memory
-- **Fast housekeeping** — `models list`, `models default`, and `--help` never load PyTorch
-- **Local only** — no network calls at runtime; models stay on disk under XDG paths
+- **Fully offline** — no internet access; all models are stored locally in standard XDG directories
 
 Output is always `{stem}-upscaled.jpg` beside each input, JPEG quality 95, 4:4:4 chroma subsampling. If that file already exists, the next run writes `{stem}-upscaled-0001.jpg`, then `-0002`, and so on. PNG inputs (including RGBA and grayscale) are converted to RGB.
 
