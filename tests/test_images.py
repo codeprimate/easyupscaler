@@ -96,3 +96,47 @@ def test_write_fills_lowest_available_index(tmp_path: Path) -> None:
 
     output = image_io.write(image, source)
     assert output.name == "photo-upscaled-0001.jpg"
+
+
+def test_write_png_uses_denoised_suffix(tmp_path: Path) -> None:
+    source = tmp_path / "photo.jpg"
+    _write_rgb_jpeg(source)
+    image = ImageIO().read(source)
+    output = ImageIO().write_png(image, source)
+    assert output.name == "photo-denoised.png"
+    assert output.exists()
+
+
+def test_write_png_conflict_index(tmp_path: Path) -> None:
+    source = tmp_path / "photo.jpg"
+    _write_rgb_jpeg(source)
+    image = ImageIO().read(source)
+    image_io = ImageIO()
+    first = image_io.write_png(image, source)
+    second = image_io.write_png(image, source)
+    assert first.name == "photo-denoised.png"
+    assert second.name == "photo-denoised-0001.png"
+
+
+def test_write_denoised_grayscale_png(tmp_path: Path) -> None:
+    source = tmp_path / "page.png"
+    _write_grayscale_png(source)
+    array, was_grayscale = ImageIO().read_preserving_grayscale_info(source)
+    assert was_grayscale is True
+    output = ImageIO().write_denoised(
+        array,
+        source,
+        preserve_grayscale=True,
+        was_grayscale=True,
+    )
+    assert output.name == "page-denoised.png"
+    with Image.open(output) as written:
+        assert written.mode == "L"
+
+
+def test_is_heic_path() -> None:
+    from easyupscaler.io.images import is_heic_path
+
+    assert is_heic_path(Path("photo.heic")) is True
+    assert is_heic_path(Path("photo.HEIF")) is True
+    assert is_heic_path(Path("photo.jpg")) is False

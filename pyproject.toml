@@ -18,6 +18,7 @@ dependencies = [
     "spandrel>=0.4",
     "spandrel-extra-arches",
     "numpy>=1.26",
+    "pillow-heif>=0.16",
 ]
 
 [project.urls]

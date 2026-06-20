@@ -5,7 +5,7 @@ Upscale images from the terminal with community super-resolution models — no G
 ```bash
 easyupscaler models import ~/Downloads/RealESRGAN_x4plus.pth
 easyupscaler models default RealESRGAN_x4plus
-easyupscaler photo.png
+easyupscaler scale photo.png
 # → photo-upscaled.jpg
 ```
 
@@ -19,7 +19,7 @@ easyupscaler is a single command that handles model import, defaults, batch runs
 
 ## What you get
 
-- **One entry point** — `easyupscaler` for upscaling and `easyupscaler models` for model management
+- **One entry point** — `easyupscaler scale` for upscaling, `easyupscaler denoise` for AI denoising, and `easyupscaler models` for model management
 - **Community weights, unchanged** — import `.pth` and `.safetensors` files that work in ComfyUI and [OpenModelDB](https://openmodeldb.info/)
 - **Batch-friendly** — pass multiple paths or shell globs; exit code `1` if any file fails
 - **Large images** — tiled inference with automatic tile-size reduction on out-of-memory
@@ -69,7 +69,7 @@ easyupscaler models import /path/to/RealESRGAN_x4plus.pth
 easyupscaler models default RealESRGAN_x4plus
 
 # 3. Upscale
-easyupscaler ~/Pictures/photo.jpg
+easyupscaler scale ~/Pictures/photo.jpg
 ```
 
 Output lands next to the input: `~/Pictures/photo-upscaled.jpg`. Dimensions are input size × model scale (a 2048×2048 image with a 4× model becomes 8192×8192; a 1× model keeps the same size for detail enhancement).
@@ -77,22 +77,37 @@ Output lands next to the input: `~/Pictures/photo-upscaled.jpg`. Dimensions are 
 Override the default for one run:
 
 ```bash
-easyupscaler --model RealESRGAN_x4plus scan.png print.png
+easyupscaler scale --model RealESRGAN_x4plus scan.png print.png
 ```
+
+## Denoise
+
+Denoise removes sensor noise and compression artifacts at 1× resolution. Models are downloaded automatically on first use.
+
+```bash
+# Photo mode (JPEG, PNG, HEIC)
+easyupscaler denoise photo --strength low ~/Pictures/photo.heic
+
+# Art or manga illustrations
+easyupscaler denoise art *.jpg
+easyupscaler denoise manga --strength high page.png
+```
+
+Output is `{stem}-denoised.png` beside each input (PNG, lossless). HEIC photo mode runs a two-pass pipeline (SCUNet + FBCNN). See [docs/specification-denoise.md](docs/specification-denoise.md) for the full model selection matrix.
 
 Batch via shell globs:
 
 ```bash
-easyupscaler *.png
-easyupscaler photos/*.jpg --model 4xUltrasharp
+easyupscaler scale *.png
+easyupscaler scale photos/*.jpg --model 4xUltrasharp
 ```
 
 ## Commands
 
-### Upscale
+### Scale (upscale)
 
 ```
-easyupscaler [--model NAME] <image> [<image> ...]
+easyupscaler scale [--model NAME] <image> [<image> ...]
 ```
 
 | Flag / arg | Description |
@@ -103,6 +118,20 @@ easyupscaler [--model NAME] <image> [<image> ...]
 Progress goes to stdout. Errors and warnings go to stderr. In a TTY you get a Rich progress bar and per-file ✓/✗ lines. When piped or redirected, output is one plain line per file.
 
 Exit `0` when every file succeeds. Exit `1` on any failure, including an empty argument list.
+
+### Denoise
+
+```
+easyupscaler denoise <mode> [--strength low|high] <image> [<image> ...]
+```
+
+| Flag / arg | Description |
+|---|---|
+| `<mode>` | `photo`, `art`, or `manga` — selects models automatically |
+| `--strength` | `low` (default) or `high` |
+| `<image> ...` | One or more file paths |
+
+Output is PNG at 1× resolution (`{stem}-denoised.png`). Denoise models download automatically on first use. Always loads PyTorch.
 
 ### Model management
 

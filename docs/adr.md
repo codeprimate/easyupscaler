@@ -15,3 +15,7 @@ Index of accepted decisions for easyupscaler MVP. Each ADR is immutable once acc
 | [009](./adr/009-development-toolchain.md) | uv, ruff, mypy, and Makefile for dev/build/test | Accepted |
 | [010](./adr/010-code-coverage-gate.md) | ≥80% line coverage gate via pytest-cov | Accepted |
 | [011](./adr/011-output-conflict-indexing.md) | Indexed output filenames on conflict | Accepted |
+| [012](./adr/012-denoise-model-auto-download.md) | Auto-download of managed denoise model weights | Accepted |
+| [013](./adr/013-denoise-png-output.md) | PNG output for denoise command | Accepted |
+| [014](./adr/014-heic-two-pass-denoise.md) | Two-pass denoise pipeline for HEIC photo inputs | Accepted |
+| [015](./adr/015-heic-pillow-heif.md) | HEIC support via required pillow-heif dependency | Accepted |

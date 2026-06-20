@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+import numpy as np
 import pytest
 import torch
 from spandrel import ModelTiling
@@ -8,6 +9,8 @@ from easyupscaler.upscaling.tiling import (
     DEFAULT_TILE_OVERLAP,
     DEFAULT_TILE_SIZE,
     MIN_TILE_SIZE,
+    stream_tiled_ndarray,
+    tiled_same_size,
     tiled_upscale,
 )
 
@@ -73,3 +76,36 @@ def test_internal_tiling_skips_external_tiles() -> None:
     output = tiled_upscale(model, tensor, tile_size=512, overlap=32)
     assert output.shape == (1, 3, 2048, 2048)
     assert model.calls == 1
+
+
+def test_tiled_same_size_preserves_dimensions() -> None:
+    calls = {"count": 0}
+
+    def forward(tile: torch.Tensor) -> torch.Tensor:
+        calls["count"] += 1
+        return tile
+
+    tensor = torch.rand(1, 3, 1024, 1024)
+    output = tiled_same_size(forward, tensor, tile_size=512, overlap=32)
+    assert output.shape == tensor.shape
+    assert calls["count"] > 1
+
+
+def test_stream_tiled_ndarray_never_builds_full_device_tensor() -> None:
+    calls = {"max_elements": 0}
+
+    def forward_tile(tile: torch.Tensor) -> torch.Tensor:
+        calls["max_elements"] = max(calls["max_elements"], tile.numel())
+        return tile
+
+    image = np.random.rand(1024, 1024, 3).astype(np.float32)
+    output = stream_tiled_ndarray(
+        image,
+        forward_tile,
+        torch.device("cpu"),
+        tile_size=512,
+        overlap=32,
+    )
+    assert output.shape == image.shape
+    assert calls["max_elements"] < image.size
+    assert calls["max_elements"] > 0

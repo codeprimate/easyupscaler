@@ -20,3 +20,11 @@ class ImportModelError(EasyUpscalerError):
 
 class UnsupportedModelError(ImportModelError):
     """Raised when Spandrel cannot recognise the model architecture."""
+
+
+class DenoiseDownloadError(EasyUpscalerError):
+    """Raised when a managed denoise model cannot be downloaded."""
+
+
+class DenoiseModelCorruptError(EasyUpscalerError):
+    """Raised when a managed denoise model file is corrupt."""

@@ -1,6 +1,5 @@
 import os
 import sys
-from typing import Annotated
 
 import typer
 
@@ -11,9 +10,10 @@ from easyupscaler.cli.models import models_app
 
 app = typer.Typer(
     add_completion=False,
-    invoke_without_command=True,
-    no_args_is_help=False,
+    no_args_is_help=True,
 )
+
+app.add_typer(models_app, name="models")
 
 
 def _version_callback(value: bool) -> None:
@@ -24,32 +24,38 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
-    ctx: typer.Context,
-    version: Annotated[
-        bool | None,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="Show version and exit.",
-        ),
-    ] = None,
-    model: Annotated[
-        str | None,
-        typer.Option("--model", help="Model name to use for upscaling."),
-    ] = None,
-    paths: Annotated[
-        list[str] | None,
-        typer.Argument(help="Image file paths to upscale."),
-    ] = None,
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
 ) -> None:
-    """Upscale images with imported GAN-based super-resolution models."""
-    if ctx.invoked_subcommand is not None:
-        return
+    """Upscale and denoise images with GAN-based models."""
 
-    from easyupscaler.cli.upscale import run_upscale
 
-    run_upscale(paths or [], model=model)
+@app.command("scale")
+def scale_command(
+    paths: list[str] = typer.Argument(default=[]),
+    model: str | None = typer.Option(None, "--model", help="Model name to use for upscaling."),
+) -> None:
+    """Upscale images with imported super-resolution models."""
+    from easyupscaler.cli.scale import run_scale
+
+    run_scale(paths, model=model)
+
+
+@app.command("denoise")
+def denoise_command(
+    mode: str = typer.Argument(..., help="Denoise mode: photo, art, or manga."),
+    paths: list[str] = typer.Argument(default=[]),
+    strength: str = typer.Option("low", "--strength", help="Denoise strength: low or high."),
+) -> None:
+    """Denoise images with automatically selected AI models."""
+    from easyupscaler.cli.denoise import run_denoise
+
+    run_denoise(paths, mode=mode, strength=strength)
 
 
 def main_entry() -> int:

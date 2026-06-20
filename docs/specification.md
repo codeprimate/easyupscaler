@@ -19,9 +19,13 @@ easyupscaler fills that gap: a single `easyupscaler` command that manages models
 
 ### Functional Requirements
 
-#### 1. Upscale command
+#### 1. Scale command (upscale)
 
-`easyupscaler [--model <name>] <image> [<image> ...]`
+`easyupscaler scale [--model <name>] <image> [<image> ...]`
+
+**Breaking change:** the bare invocation `easyupscaler <image>` no longer works. Use `easyupscaler scale` instead. Typer shows an error directing users to `scale` or `denoise`.
+
+Full denoise command specification: [specification-denoise.md](./specification-denoise.md).
 
 - Accepts one or more image paths as positional arguments
 - Shell expands glob patterns before the process starts; the CLI receives a flat list of paths

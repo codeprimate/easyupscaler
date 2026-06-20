@@ -6,17 +6,19 @@ import typer
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
 
+from easyupscaler.io.heic import ensure_heif_registered
 from easyupscaler.upscaling.service import UpscaleResult, UpscaleService
 
 EMPTY_INPUT_ERROR = "Error: no input images. Pass one or more file paths."
 COMPLETED_SUMMARY_TEMPLATE = "Completed: {succeeded} succeeded, {failed} failed in {elapsed}."
 
 
-def run_upscale(paths: list[str], *, model: str | None) -> None:
+def run_scale(paths: list[str], *, model: str | None) -> None:
     if not paths:
         typer.echo(EMPTY_INPUT_ERROR, err=True)
         raise typer.Exit(code=1)
 
+    ensure_heif_registered()
     resolved_paths = [Path(path) for path in paths]
     is_tty = sys.stdout.isatty()
     service = UpscaleService()

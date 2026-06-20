@@ -6,27 +6,33 @@ import pytest
 from typer.testing import CliRunner
 
 from easyupscaler.cli.main import app
-from easyupscaler.cli.upscale import run_upscale
+from easyupscaler.cli.scale import run_scale
 from easyupscaler.upscaling.service import UpscaleResult
 
 runner = CliRunner()
 
 
-def test_empty_paths_exit_one_before_torch(without_torch) -> None:
-    result = runner.invoke(app, [])
+def test_empty_scale_exit_one_before_torch(without_torch) -> None:
+    result = runner.invoke(app, ["scale"])
     assert result.exit_code == 1
     assert "Error: no input images" in result.stderr
     assert "torch" not in sys.modules
 
 
-def test_missing_default_exit_one(
-    isolated_paths,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_bare_invocation_fails(without_torch, tmp_path: Path) -> None:
     image = tmp_path / "input.jpg"
     image.write_bytes(b"image")
     result = runner.invoke(app, [str(image)])
+    assert result.exit_code != 0
+
+
+def test_missing_default_exit_one(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    image = tmp_path / "input.jpg"
+    image.write_bytes(b"image")
+    result = runner.invoke(app, ["scale", str(image)])
     assert result.exit_code == 1
     assert "no default model set" in result.stderr
 
@@ -42,10 +48,10 @@ def test_non_tty_output(isolated_paths, tmp_path: Path, monkeypatch: pytest.Monk
             on_progress(result)
         return [result]
 
-    monkeypatch.setattr("easyupscaler.cli.upscale.UpscaleService", lambda: MagicMock(run=fake_run))
-    monkeypatch.setattr("easyupscaler.cli.upscale.sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("easyupscaler.cli.scale.UpscaleService", lambda: MagicMock(run=fake_run))
+    monkeypatch.setattr("easyupscaler.cli.scale.sys.stdout.isatty", lambda: False)
 
-    result = runner.invoke(app, [str(image)])
+    result = runner.invoke(app, ["scale", str(image)])
     assert result.exit_code == 0
     assert f"{image} → {output}" in result.stdout
 
@@ -83,19 +89,19 @@ def test_tty_completed_includes_elapsed(
         def stop(self) -> None:
             pass
 
-    monkeypatch.setattr("easyupscaler.cli.upscale.UpscaleService", lambda: MagicMock(run=fake_run))
-    monkeypatch.setattr("easyupscaler.cli.upscale.Progress", FakeProgress)
-    monkeypatch.setattr("easyupscaler.cli.upscale.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("easyupscaler.cli.scale.UpscaleService", lambda: MagicMock(run=fake_run))
+    monkeypatch.setattr("easyupscaler.cli.scale.Progress", FakeProgress)
+    monkeypatch.setattr("easyupscaler.cli.scale.sys.stdout.isatty", lambda: True)
     monkeypatch.setattr(
-        "easyupscaler.cli.upscale.typer.echo",
+        "easyupscaler.cli.scale.typer.echo",
         lambda message, **kwargs: echoed.append(message),
     )
     monkeypatch.setattr(
-        "easyupscaler.cli.upscale.time.perf_counter",
+        "easyupscaler.cli.scale.time.perf_counter",
         lambda: next(perf_counter_values),
     )
 
-    run_upscale([str(image)], model="test-model")
+    run_scale([str(image)], model="test-model")
 
     assert "Completed: 1 succeeded, 0 failed in 0:45." in echoed
 
@@ -119,9 +125,9 @@ def test_partial_failure_exit_one(
                 on_progress(item)
         return results
 
-    monkeypatch.setattr("easyupscaler.cli.upscale.UpscaleService", lambda: MagicMock(run=fake_run))
-    monkeypatch.setattr("easyupscaler.cli.upscale.sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("easyupscaler.cli.scale.UpscaleService", lambda: MagicMock(run=fake_run))
+    monkeypatch.setattr("easyupscaler.cli.scale.sys.stdout.isatty", lambda: False)
 
-    result = runner.invoke(app, [str(bad), str(good)])
+    result = runner.invoke(app, ["scale", str(bad), str(good)])
     assert result.exit_code == 1
     assert "FAILED: file not found" in result.stdout

@@ -48,7 +48,8 @@ flowchart TB
   subgraph presentation [Presentation]
     MAIN[cli/main.py]
     MODELS_CMD[cli/models.py]
-    UPSCALE_CMD[cli/upscale.py]
+    SCALE_CMD[cli/scale.py]
+    DENOISE_CMD[cli/denoise.py]
   end
 
   subgraph application [Application]
@@ -56,10 +57,12 @@ flowchart TB
     REG[models/registry.py]
     IMP[models/import_model.py]
     SVC[upscaling/service.py]
+    DENOISE_SVC[denoise/pipeline.py]
   end
 
   subgraph domain [Domain]
     BACKEND[upscaling/backends/spandrel_backend.py]
+    DENOISE_BACKENDS[denoise/backends/]
     TILE[upscaling/tiling.py]
     IO[io/images.py]
     ERR[errors.py]
@@ -72,11 +75,15 @@ flowchart TB
   end
 
   MAIN --> MODELS_CMD
-  MAIN --> UPSCALE_CMD
+  MAIN --> SCALE_CMD
+  MAIN --> DENOISE_CMD
   MODELS_CMD --> REG
   MODELS_CMD --> IMP
   MODELS_CMD --> CFG
-  UPSCALE_CMD --> SVC
+  SCALE_CMD --> SVC
+  DENOISE_CMD --> DENOISE_SVC
+  DENOISE_SVC --> DENOISE_BACKENDS
+  DENOISE_SVC --> IO
   SVC --> CFG
   SVC --> REG
   SVC --> BACKEND
@@ -104,11 +111,13 @@ Built with Typer ([ADR-005](./adr/005-cli-framework-typer.md)). Lazy-imports tor
 
 | Command | Handler | Loads torch? | Service calls |
 |---------|---------|--------------|---------------|
-| `easyupscaler <paths...>` | `cli/upscale.py` | Yes | `UpscaleService.run(paths, model=None)` |
-| `easyupscaler --model NAME <paths...>` | `cli/upscale.py` | Yes | `UpscaleService.run(paths, model=NAME)` |
+| `easyupscaler scale [--model NAME] <paths...>` | `cli/scale.py` | Yes | `UpscaleService.run(paths, model=NAME)` |
+| `easyupscaler denoise <mode> [--strength] <paths...>` | `cli/denoise.py` | Yes | `DenoiseService.run(paths, mode, strength)` |
 | `easyupscaler models list` | `cli/models.py` | No | `ModelRegistry.list()` |
 | `easyupscaler models import PATH` | `cli/models.py` | Yes | `import_model(path)` |
 | `easyupscaler models default NAME` | `cli/models.py` | No | `ConfigService.set_default_model(NAME)` |
+
+The bare invocation `easyupscaler <paths...>` is no longer supported. Users must use `easyupscaler scale` or `easyupscaler denoise`. See [specification-denoise.md](./specification-denoise.md) for denoise behavior.
 
 `cli/main.py` sets `PYTORCH_ENABLE_MPS_FALLBACK=1` before any torch import ([ADR-002](./adr/002-inference-device-policy.md)).
 
@@ -288,13 +297,25 @@ easyupscaler/
   cli/
     main.py                   # Typer app, env vars, entry point
     models.py
-    upscale.py
+    scale.py                  # scale subcommand (formerly bare upscale)
+    denoise.py                # denoise subcommand
   config/
     paths.py                  # XDG directory helpers
     settings.py               # ConfigService (no torch)
   models/
     registry.py               # ModelRegistry (no torch)
     import_model.py           # local file import (lazy torch)
+  denoise/
+    catalog.py                # managed model catalog and selection matrix
+    downloader.py             # auto-download denoise weights
+    pipeline.py               # DenoiseService
+    backends/
+      base.py                 # DenoiseBackend protocol
+      spandrel_common.py      # shared Spandrel load/device/tiling
+      scunet_backend.py
+      fbcnn_backend.py
+      dejpg_backend.py
+      archiver_backend.py
   upscaling/
     service.py                # UpscaleService
     tiling.py                 # tiled inference
@@ -303,6 +324,7 @@ easyupscaler/
       spandrel_backend.py
   io/
     images.py                 # ImageIO
+    heic.py                   # pillow-heif registration
   errors.py                   # domain exceptions
 tests/
   ...
@@ -405,3 +427,8 @@ Linux CI uses mocked backend. MPS tests are manual or optional slow markers.
 | [008](./adr/008-lazy-torch-imports.md) | Lazy torch/spandrel imports |
 | [009](./adr/009-development-toolchain.md) | uv, ruff, mypy, Makefile |
 | [010](./adr/010-code-coverage-gate.md) | ≥80% coverage gate in make test |
+| [011](./adr/011-output-conflict-indexing.md) | Indexed output filenames on conflict |
+| [012](./adr/012-denoise-model-auto-download.md) | Auto-download of managed denoise weights |
+| [013](./adr/013-denoise-png-output.md) | PNG output for denoise command |
+| [014](./adr/014-heic-two-pass-denoise.md) | Two-pass HEIC photo denoise |
+| [015](./adr/015-heic-pillow-heif.md) | Required pillow-heif for HEIC |
