@@ -309,6 +309,8 @@ easyupscaler/
     import_model.py           # local file import (lazy torch)
   denoise/
     catalog.py                # managed model catalog and selection matrix
+    document_constants.py     # Sauvola window/contrast constants for document mode
+    document_enhance.py       # Sauvola binarize + Gaussian anti-alias
     downloader.py             # auto-download denoise weights
     pipeline.py               # DenoiseService
     backends/
@@ -318,6 +320,7 @@ easyupscaler/
       fbcnn_backend.py
       dejpg_backend.py
       archiver_backend.py
+      book_compact_backend.py # Compact arch for document mode
   upscaling/
     service.py                # UpscaleService
     tiling.py                 # tiled inference
@@ -435,3 +438,6 @@ Linux CI uses mocked backend. MPS tests are manual or optional slow markers.
 | [014](./adr/014-heic-two-pass-denoise.md) | Two-pass HEIC photo denoise |
 | [015](./adr/015-heic-pillow-heif.md) | Required pillow-heif for HEIC |
 | [016](./adr/016-optional-output-directory.md) | Optional `--output` / `-o` directory |
+| [017](./adr/017-scikit-image-dependency.md) | scikit-image hard dep for document mode Sauvola |
+| [018](./adr/018-document-two-pass-pipeline.md) | Two-pass AI pipeline for document denoise | Superseded by 019 |
+| [019](./adr/019-document-binarize-antialias.md) | Document mode: Archiver + Sauvola binarize + anti-alias |

@@ -37,7 +37,7 @@ easyupscaler denoise <mode> [--strength low|high] [--output DIR] <image> [<image
 
 | Argument / flag | Values | Default | Notes |
 |-----------------|--------|---------|-------|
-| `<mode>` | `photo`, `art`, `manga` | Required | Controls model selection and output colorspace |
+| `<mode>` | `photo`, `art`, `manga`, `document` | Required | Controls model selection and output colorspace |
 | `--strength` | `low`, `high` | `low` | Controls which model variant is selected |
 | `--output` / `-o` | Directory path | (beside input) | Write all outputs under `DIR`; created if missing ([ADR-016](./adr/016-optional-output-directory.md)) |
 | `<image> ...` | One or more file paths | Required | Shell expands globs before invocation |
@@ -74,6 +74,9 @@ Model selection is determined at runtime by mode + strength + input format. The 
 | `art` | `high` | any | Archiver Medium pass |
 | `manga` | `low` | any | 1xDeJPG_realplksr_otf pass (colorspace-preserved) |
 | `manga` | `high` | any | Archiver Medium pass (colorspace-preserved) |
+| `document` | `low` / `high` | any | Archiver Medium → Sauvola binarize → anti-alias (see [specification-document-mode.md](./specification-document-mode.md)) |
+
+**Document mode:** For full behavior (two-pass AI pipeline, Sauvola post-processing, grayscale output), see [specification-document-mode.md](./specification-document-mode.md).
 
 **HEIC two-pass rationale:** iPhone HEIC files carry sensor noise (ISO grain) plus potential compression artifacts. SCUNet removes sensor noise first; FBCNN then cleans any residual compression artifacts introduced by the HEIC encode or downstream processing. Both passes are always applied to HEIC regardless of strength; strength controls which SCUNet variant and FBCNN aggressiveness.
 
@@ -91,7 +94,8 @@ Denoise weights are downloaded automatically and stored in `$XDG_DATA_HOME/easyu
 | `scunet_gan` | `scunet_color_real_gan.pth` | SCUNet | photo --high | KAIR releases (cszn) |
 | `fbcnn_color` | `fbcnn_color.pth` | FBCNN | HEIC second pass | FBCNN releases (jiaxi-jiang) |
 | `dejpg_art` | `1xDeJPG_realplksr_otf.safetensors` | RealPLKSR | art/manga --low | Phhofm GitHub releases |
-| `archivist_medium` | `1x-Archivist_Medium.pth` | ESRGAN | art/manga --high | Archivist-Project-Denoiser (Loganavter) |
+| `archivist_medium` | `1x-Archivist_Medium.pth` | ESRGAN | art/manga --high; document mode | Archivist-Project-Denoiser (Loganavter) |
+| `book_compact` | `1xBook-Compact.safetensors` | Compact (SRVGGNet) | (catalog only; not used by document mode) | starinspace/StarinspaceUpscale |
 
 **Lazy download:** the tool downloads only the model(s) required for the current invocation. It does not pre-download the full catalog. For HEIC inputs in photo mode, both `scunet_psnr` (or `scunet_gan`) and `fbcnn_color` are downloaded as needed in the same run.
 

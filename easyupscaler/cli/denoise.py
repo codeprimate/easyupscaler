@@ -15,7 +15,7 @@ UNSUPPORTED_MODEL_FLAG_ERROR = (
     "Model is selected automatically by mode and strength."
 )
 COMPLETED_SUMMARY_TEMPLATE = "Completed: {succeeded} succeeded, {failed} failed in {elapsed}."
-VALID_MODES = {"photo", "art", "manga"}
+VALID_MODES = {"photo", "art", "manga", "document"}
 VALID_STRENGTHS = {"low", "high"}
 
 
@@ -31,7 +31,10 @@ def run_denoise(
         raise typer.Exit(code=1)
 
     if mode not in VALID_MODES:
-        typer.echo(f"Error: invalid mode '{mode}'. Choose photo, art, or manga.", err=True)
+        typer.echo(
+            f"Error: invalid mode '{mode}'. Choose photo, art, manga, or document.",
+            err=True,
+        )
         raise typer.Exit(code=1)
 
     if strength not in VALID_STRENGTHS:

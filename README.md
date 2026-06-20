@@ -92,6 +92,7 @@ Denoise cleans noise and compression artifacts **without enlarging** the image. 
 easyupscaler denoise photo ~/Pictures/IMG_1234.heic
 easyupscaler denoise art illustration.png
 easyupscaler denoise manga --strength high page.png
+easyupscaler denoise document scan.jpg
 easyupscaler denoise photo *.jpg --output ./cleaned
 ```
 
@@ -104,6 +105,7 @@ easyupscaler denoise photo *.jpg --output ./cleaned
 | `photo` | Camera and phone shots — JPEG, PNG, HEIC |
 | `art` | Digital art, game textures, non-manga illustration |
 | `manga` | Manga and comic pages (same models as `art`, different color handling) |
+| `document` | Scanned or photographed text — receipts, notes, book pages (grayscale output; use `--strength high` for faint ink) |
 
 ### Strength (`--strength low` or `high`)
 

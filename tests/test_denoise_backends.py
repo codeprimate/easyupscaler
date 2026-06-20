@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 import torch
 
+from easyupscaler.denoise.backends.book_compact_backend import BookCompactBackend
 from easyupscaler.denoise.backends.fbcnn_backend import FBCNN_HIGH_STRENGTH_QF, FBCNNBackend
 from easyupscaler.denoise.backends.spandrel_common import SpandrelDenoiseBackend
 
@@ -86,3 +87,30 @@ def test_spandrel_denoise_backend_forward(tmp_path: Path, monkeypatch: pytest.Mo
     image = np.ones((8, 8, 3), dtype=np.float32) * 0.5
     output = backend.denoise(image)
     assert output.shape == (8, 8, 3)
+
+
+def test_book_compact_backend_instantiation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    weights = tmp_path / "book.safetensors"
+    weights.write_bytes(b"x")
+
+    mock_descriptor = MagicMock()
+    mock_descriptor.scale = 1
+
+    monkeypatch.setattr(
+        "easyupscaler.denoise.backends.spandrel_common.stream_tiled_ndarray",
+        lambda image, forward, device, **kwargs: np.ones(image.shape, dtype=np.float32) * 0.5,
+    )
+
+    with patch.object(SpandrelDenoiseBackend, "_load_model", return_value=mock_descriptor):
+        with patch.object(
+            SpandrelDenoiseBackend,
+            "_select_device",
+            return_value=torch.device("cpu"),
+        ):
+            with patch("spandrel_extra_arches.install"):
+                backend = BookCompactBackend(weights)
+
+    assert isinstance(backend, BookCompactBackend)

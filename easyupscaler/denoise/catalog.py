@@ -10,9 +10,10 @@ CatalogKey = Literal[
     "fbcnn_color",
     "dejpg_art",
     "archivist_medium",
+    "book_compact",
 ]
 
-DenoiseMode = Literal["photo", "art", "manga"]
+DenoiseMode = Literal["photo", "art", "manga", "document"]
 DenoiseStrength = Literal["low", "high"]
 
 SCUNET_PSNR_URL = (
@@ -29,6 +30,10 @@ DEJPG_ART_URL = (
 ARCHIVIST_MEDIUM_URL = (
     "https://github.com/Loganavter/Archivist-Project-Denoiser/releases/download/"
     "v1.0/1x-Archivist_Medium.pth"
+)
+BOOK_COMPACT_URL = (
+    "https://github.com/starinspace/StarinspaceUpscale/releases/download/Models/"
+    "1xBook-Compact.safetensors"
 )
 
 
@@ -71,6 +76,12 @@ DENOISE_MODEL_CATALOG: dict[CatalogKey, CatalogEntry] = {
         url=ARCHIVIST_MEDIUM_URL,
         display_name="Archiver Medium",
     ),
+    "book_compact": CatalogEntry(
+        key="book_compact",
+        filename="1xBook-Compact.safetensors",
+        url=BOOK_COMPACT_URL,
+        display_name="Book Compact",
+    ),
 }
 
 
@@ -89,6 +100,9 @@ def resolve_models(
         if is_heic:
             return [scunet_key, "fbcnn_color"]
         return [scunet_key]
+
+    if mode == "document":
+        return ["archivist_medium"]
 
     if strength == "low":
         return ["dejpg_art"]

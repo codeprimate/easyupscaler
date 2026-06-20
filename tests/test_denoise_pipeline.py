@@ -135,7 +135,81 @@ def test_download_failure_aborts_job(isolated_paths, tmp_path: Path) -> None:
         service.run([source], "photo", "low")
 
 
-def _write_test_jpeg(path: Path) -> None:
+def test_document_mode_writes_grayscale_png(isolated_paths, tmp_path: Path) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+    call_order: list[str] = []
+
+    def factory(key):
+        backend = FakeBackend(key)
+        call_order.append(key)
+        return backend
+
+    service = DenoiseService(
+        backend_factory=factory,
+        download_models=lambda keys, **kwargs: None,
+    )
+    results = service.run([source], "document", "low")
+    assert results[0].error is None
+    assert results[0].output is not None
+    assert results[0].output.name == "scan-denoised.png"
+    assert call_order == ["archivist_medium"]
+
     from PIL import Image
 
-    Image.new("RGB", (4, 4), color=(128, 64, 32)).save(path, format="JPEG")
+    with Image.open(results[0].output) as output_image:
+        assert output_image.mode == "L"
+
+
+def test_document_mode_high_strength(isolated_paths, tmp_path: Path) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+    )
+    results = service.run([source], "document", "high")
+    assert results[0].error is None
+    assert results[0].output is not None
+
+
+def test_document_mode_too_small_image_fails_per_file(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "tiny.jpg"
+    _write_test_jpeg(source, size=20)
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+    )
+    results = service.run([source], "document", "high")
+    assert results[0].error is not None
+    assert "image too small for document mode" in results[0].error
+
+
+def test_document_mode_batch_continues_after_too_small(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    tiny = tmp_path / "tiny.jpg"
+    good = tmp_path / "good.jpg"
+    _write_test_jpeg(tiny, size=20)
+    _write_test_jpeg(good, size=100)
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+    )
+    results = service.run([tiny, good], "document", "high")
+    assert results[0].error is not None
+    assert results[1].error is None
+
+
+def _write_test_jpeg(path: Path, size: int = 4) -> None:
+    from PIL import Image
+
+    Image.new("RGB", (size, size), color=(128, 64, 32)).save(path, format="JPEG")

@@ -87,18 +87,29 @@ class DenoiseService:
         file_is_heic = is_heic_path(path)
         keys = resolve_models(mode, strength, is_heic=file_is_heic)
         pass_description = pass_display_names(keys) if len(keys) > 1 else None
-        preserve_grayscale = mode == "manga"
 
         try:
             image, was_grayscale = self._image_io.read_preserving_grayscale_info(path)
             processed = self._run_passes(image, mode, strength, file_is_heic)
-            output = self._image_io.write_denoised(
-                processed,
-                path,
-                preserve_grayscale=preserve_grayscale,
-                was_grayscale=was_grayscale,
-                output_dir=output_dir,
-            )
+            if mode == "document":
+                from easyupscaler.denoise.document_enhance import enhance_document_contrast
+
+                try:
+                    processed = enhance_document_contrast(processed, strength)
+                except ValueError as exc:
+                    return DenoiseResult(path=path, output=None, error=str(exc))
+                output = self._image_io.write_png(
+                    processed, path, mode="L", output_dir=output_dir
+                )
+            else:
+                preserve_grayscale = mode == "manga"
+                output = self._image_io.write_denoised(
+                    processed,
+                    path,
+                    preserve_grayscale=preserve_grayscale,
+                    was_grayscale=was_grayscale,
+                    output_dir=output_dir,
+                )
         except ImageReadError as exc:
             return DenoiseResult(path=path, output=None, error=str(exc))
         except OSError as exc:
@@ -185,6 +196,10 @@ def _default_backend_factory(key: CatalogKey) -> DenoiseBackend | FBCNNDenoiseBa
         from easyupscaler.denoise.backends.dejpg_backend import DeJPGBackend
 
         return DeJPGBackend(weights_path)
+    if key == "book_compact":
+        from easyupscaler.denoise.backends.book_compact_backend import BookCompactBackend
+
+        return BookCompactBackend(weights_path)
     from easyupscaler.denoise.backends.archiver_backend import ArchiverBackend
 
     return ArchiverBackend(weights_path)

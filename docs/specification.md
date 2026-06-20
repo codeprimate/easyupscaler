@@ -25,7 +25,7 @@ easyupscaler fills that gap: a single `easyupscaler` command that manages models
 
 **Breaking change:** the bare invocation `easyupscaler <image>` no longer works. Use `easyupscaler scale` instead. Typer shows an error directing users to `scale` or `denoise`.
 
-Full denoise command specification: [specification-denoise.md](./specification-denoise.md).
+Full denoise command specification: [specification-denoise.md](./specification-denoise.md). Document mode: [specification-document-mode.md](./specification-document-mode.md).
 
 - Accepts one or more image paths as positional arguments
 - Shell expands glob patterns before the process starts; the CLI receives a flat list of paths

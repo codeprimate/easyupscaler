@@ -22,6 +22,57 @@ def test_invalid_mode_exit_one(without_torch, tmp_path: Path) -> None:
     result = runner.invoke(app, ["denoise", "invalid", str(image)])
     assert result.exit_code == 1
     assert "invalid mode" in result.stderr
+    assert "document" in result.stderr
+
+
+def test_document_mode_routes_to_service(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = tmp_path / "scan.jpg"
+    image.write_bytes(b"image")
+    captured: dict[str, str] = {}
+
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
+        captured["mode"] = mode
+        captured["strength"] = strength
+        return []
+
+    monkeypatch.setattr(
+        "easyupscaler.cli.denoise.DenoiseService",
+        lambda: MagicMock(run=fake_run),
+    )
+
+    result = runner.invoke(app, ["denoise", "document", str(image)])
+    assert result.exit_code == 0
+    assert captured["mode"] == "document"
+    assert captured["strength"] == "low"
+
+
+def test_document_mode_high_strength_routes_to_service(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = tmp_path / "scan.jpg"
+    image.write_bytes(b"image")
+    captured: dict[str, str] = {}
+
+    def fake_run(paths, mode, strength, on_progress=None, on_download_progress=None, **kwargs):
+        captured["mode"] = mode
+        captured["strength"] = strength
+        return []
+
+    monkeypatch.setattr(
+        "easyupscaler.cli.denoise.DenoiseService",
+        lambda: MagicMock(run=fake_run),
+    )
+
+    result = runner.invoke(app, ["denoise", "document", str(image), "--strength", "high"])
+    assert result.exit_code == 0
+    assert captured["mode"] == "document"
+    assert captured["strength"] == "high"
 
 
 def test_invalid_strength_exit_one(without_torch, tmp_path: Path) -> None:
