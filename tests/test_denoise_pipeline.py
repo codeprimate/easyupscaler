@@ -311,6 +311,152 @@ def test_document_mode_missing_tesseract_warns_once_per_batch(
     assert "Tesseract not found" in warnings[0]
 
 
+def test_document_mode_ocrai_writes_txt_and_md(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+
+    class FakeOcraiService:
+        closed = False
+
+        def extract_markdown(self, rgb_uint8: np.ndarray) -> str:
+            return "# Title\n\nmultilingual body"
+
+        def close(self) -> None:
+            FakeOcraiService.closed = True
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+        download_ocrai_models=lambda **kwargs: None,
+        ocrai_service_factory=lambda: FakeOcraiService(),
+        ocr_available=lambda: True,
+        ocr_extractor=lambda gray: "tesseract text",
+    )
+    results = service.run([source], "document", "low", use_ocrai=True)
+    assert FakeOcraiService.closed is True
+    assert results[0].error is None
+    assert results[0].text_output is not None
+    assert results[0].text_output.name == "scan.txt"
+    assert results[0].text_output.read_text(encoding="utf-8") == "tesseract text"
+    assert results[0].markdown_output is not None
+    assert results[0].markdown_output.name == "scan.md"
+    assert results[0].markdown_output.read_text(encoding="utf-8") == "# Title\n\nmultilingual body"
+
+
+def test_document_mode_ocrai_skips_download_when_no_text(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+    download_called = False
+
+    def fail_if_called(**kwargs):
+        nonlocal download_called
+        download_called = True
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+        download_ocrai_models=fail_if_called,
+        ocrai_service_factory=lambda: pytest.fail("should not construct service"),
+    )
+    results = service.run(
+        [source],
+        "document",
+        "low",
+        extract_text=False,
+        use_ocrai=True,
+    )
+    assert results[0].error is None
+    assert results[0].text_output is None
+    assert results[0].markdown_output is None
+    assert download_called is False
+
+
+def test_document_mode_ocrai_download_failure_aborts_job(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+
+    def fail_download(**kwargs):
+        raise ValueError("Error: could not download Qwen2.5-VL-3B-Instruct-Q8_0.gguf.")
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+        download_ocrai_models=fail_download,
+    )
+    with pytest.raises(ValueError, match="could not download"):
+        service.run([source], "document", "low", use_ocrai=True)
+
+
+def test_document_mode_ocrai_inference_failure_still_writes_png_and_txt(
+    isolated_paths,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+    warnings: list[str] = []
+
+    class FailingOcraiService:
+        def extract_markdown(self, rgb_uint8: np.ndarray) -> str:
+            raise RuntimeError("vlm broke")
+
+        def close(self) -> None:
+            return None
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+        download_ocrai_models=lambda **kwargs: None,
+        ocrai_service_factory=lambda: FailingOcraiService(),
+        ocr_available=lambda: True,
+        ocr_extractor=lambda gray: "plain text",
+    )
+    results = service.run(
+        [source],
+        "document",
+        "low",
+        use_ocrai=True,
+        on_warning=warnings.append,
+    )
+    assert results[0].error is None
+    assert results[0].output is not None
+    assert results[0].text_output is not None
+    assert results[0].markdown_output is None
+    assert len(warnings) == 1
+    assert "--ocrai failed for scan.jpg" in warnings[0]
+
+
+def test_document_mode_ocrai_vision_unavailable_aborts_job(
+    isolated_paths,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "scan.jpg"
+    _write_test_jpeg(source, size=100)
+
+    monkeypatch.setattr(
+        "easyupscaler.denoise.pipeline.assert_ocrai_vision_available",
+        lambda: (_ for _ in ()).throw(
+            ValueError("Error: llama-cpp-python vision support is unavailable.")
+        ),
+    )
+
+    service = DenoiseService(
+        backend_factory=lambda key: FakeBackend(key),
+        download_models=lambda keys, **kwargs: None,
+    )
+    with pytest.raises(ValueError, match="vision support is unavailable"):
+        service.run([source], "document", "low", use_ocrai=True)
+
+
 def _write_test_jpeg(path: Path, size: int = 4) -> None:
     from PIL import Image
 

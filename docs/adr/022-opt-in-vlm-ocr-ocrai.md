@@ -8,7 +8,7 @@
 
 Document denoise mode writes a cleaned grayscale PNG and, by default, plain text via Tesseract ([ADR-021](./021-document-ocr-tesseract.md)). Tesseract is fast and lightweight but English-centric (`eng`), weak on handwriting, and requires a system binary.
 
-Stakeholder decision: add an **opt-in** `--ocrai` flag that runs **Qwen2.5-VL-3B-Instruct** (Q8_0 GGUF) through **in-process llama.cpp** (`llama-cpp-python`) instead of Tesseract. The VLM path targets **multilingual** extraction and better handwriting at the cost of download size (~4.5 GB), RAM, and per-image latency.
+Stakeholder decision: add an **opt-in** `--ocrai` flag that runs **Qwen2.5-VL-3B-Instruct** (Q8_0 GGUF) through **in-process llama.cpp** (`llama-cpp-python`) instead of Tesseract. The VLM path targets **multilingual** extraction and better handwriting at the cost of download size (~4.1 GB), RAM, and per-image latency.
 
 ## Decision
 
@@ -16,7 +16,7 @@ Stakeholder decision: add an **opt-in** `--ocrai` flag that runs **Qwen2.5-VL-3B
 2. **`--ocrai` applies only in `document` mode.** Ignored elsewhere (same pattern as `--no-text`).
 3. **`--no-text` wins silently.** When both `--ocrai` and `--no-text` are passed, skip all OCR with no stderr warning.
 4. **Hard Python dependency:** add `llama-cpp-python` (vision-capable build with `Qwen25VLChatHandler`) to `[project.dependencies]`. Import lazily when `--ocrai` is active ([ADR-008](./008-lazy-torch-imports.md) spirit).
-5. **Managed VLM weights:** two GGUF files (text backbone Q8_0 + mmproj F16) live in `$XDG_DATA_HOME/easyupscaler/models/` alongside denoise weights ([ADR-012](./012-denoise-model-auto-download.md)). Not registry entries; not listed by `models list`.
+5. **Managed VLM weights:** two GGUF files (text backbone Q8_0 + mmproj Q8_0) live in `$XDG_DATA_HOME/easyupscaler/models/` alongside denoise weights ([ADR-012](./012-denoise-model-auto-download.md)). Not registry entries; not listed by `models list`.
 6. **Download on first `--ocrai` use:** try an ordered list of Hugging Face repos; abort the **entire job** if all sources fail (same severity as Archiver Medium download failure).
 7. **Inference:** in-process `Llama` + `Qwen25VLChatHandler`; load model **once per batch** (`DenoiseService.run()`); resize denoised grayscale to ≤2 MP before VLM input; convert to RGB for the vision encoder.
 8. **Runtime OCR failure** (inference error after model is loaded): warn per file on stderr; PNG succeeds; no `.txt` (soft fail, same as Tesseract runtime failure).
@@ -35,7 +35,7 @@ Primary and fallback repos (try in order until both files download):
 Canonical filenames in `MODELS_DIR`:
 
 - `Qwen2.5-VL-3B-Instruct-Q8_0.gguf` (~3.3 GB)
-- `Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf` (~1.25 GB; vision encoder, always F16)
+- `Qwen2.5-VL-3B-Instruct-mmproj-q8_0.gguf` (~805 MB; vision encoder, Q8_0 from ggml-org; unsloth fallback uses F16 mmproj)
 
 ## Alternatives considered
 
@@ -60,7 +60,7 @@ Canonical filenames in `MODELS_DIR`:
 
 **Negative**
 
-- ~4.5 GB additional disk on first `--ocrai` run
+- ~4.1 GB additional disk on first `--ocrai` run
 - Hard dep on native `llama-cpp-python` wheels (platform/Python-version sensitive)
 - Slower per-image OCR than Tesseract (seconds vs sub-second)
 - Two OCR backends to maintain and document

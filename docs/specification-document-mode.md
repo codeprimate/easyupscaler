@@ -3,7 +3,7 @@
 This document extends [`specification-denoise.md`](./specification-denoise.md) with two changes:
 
 1. **`document` mode for `easyupscaler denoise`** — a fourth mode alongside `photo`, `art`, and `manga`, targeting scanned documents and camera photos of text. It runs an Archiver Medium AI cleanup pass, then Sauvola adaptive binarization and Gaussian anti-aliasing to produce smooth high-contrast grayscale output optimized for readability.
-2. **Opt-in VLM OCR (`--ocrai`)** — an alternative text-extraction backend using Qwen2.5-VL-3B-Instruct via in-process llama.cpp ([ADR-022](./adr/022-opt-in-vlm-ocr-ocrai.md)).
+2. **Opt-in VLM Markdown (`--ocrai`)** — additionally writes `{stem}.md` via Qwen2.5-VL; Tesseract `.txt` unchanged ([ADR-022](./adr/022-opt-in-vlm-ocr-ocrai.md), [ADR-023](./adr/023-ocrai-markdown-additive.md)).
 
 All existing behavior, error messages, exit codes, and architectural constraints from `specification.md`, `specification-denoise.md`, and the accepted ADRs remain in force unless explicitly superseded here.
 
@@ -20,9 +20,9 @@ easyupscaler denoise <mode> [--strength low|high] [--no-text] [--ocrai] [--outpu
 | Flag | Document mode | Other modes |
 |------|---------------|-------------|
 | `--no-text` | Skip OCR; PNG only | Ignored |
-| `--ocrai` | Use VLM OCR instead of Tesseract | Ignored |
+| `--ocrai` | Also write VLM Markdown (`.md`) | Ignored |
 
-When both `--ocrai` and `--no-text` are passed, `--no-text` wins silently (no OCR, no stderr warning).
+When both `--ocrai` and `--no-text` are passed, `--no-text` wins silently (no Tesseract, no Markdown, no stderr warning).
 
 All other flags and positional arguments are unchanged. `document` mode behaves identically to other modes in terms of batch processing, exit codes, TTY detection, and `--output` handling.
 
@@ -53,17 +53,17 @@ PNG output matches all `denoise` modes (§2.1 of `specification-denoise.md`):
 
 **OCR backend selection:**
 
-| Condition | Backend |
-|-----------|---------|
-| `--no-text` | None |
-| `--ocrai` | Qwen2.5-VL-3B-Instruct via llama.cpp ([§6](#6-opt-in-vlm-ocr-ocrai)) |
-| (default) | Tesseract ([ADR-021](./adr/021-document-ocr-tesseract.md)) |
+| Condition | `.txt` (Tesseract) | `.md` (VLM) |
+|-----------|-------------------|-------------|
+| `--no-text` | None | None |
+| (default) | Yes | No |
+| `--ocrai` | Yes | Yes |
 
-Both backends run on the in-memory grayscale array after post-processing (no PNG re-read). Output path and conflict rules are identical.
+Both backends run on the in-memory grayscale array after post-processing (no PNG re-read). Output paths use independent indexed conflict resolution ([ADR-011](./adr/011-output-conflict-indexing.md)).
 
-**Tesseract (default):** English (`eng`); Tesseract default page segmentation (no explicit `--psm`).
+**Tesseract (`.txt`):** English (`eng`); Tesseract default page segmentation (no explicit `--psm`).
 
-**VLM (`--ocrai`):** Multilingual; no language flag. The model preserves original script and language (see §6.4).
+**VLM (`--ocrai`, `.md`):** Multilingual Markdown with minimal heading structure (see §6.5).
 
 ---
 
@@ -187,20 +187,26 @@ HEIC inputs in `document` mode follow the same logic as in `art` and `manga` mod
 
 ### 2.9 stdout / stderr contract
 
-Consistent with `specification-denoise.md §2.5`. Per-file stdout lists all artifacts written for that input.
+Consistent with `specification-denoise.md §2.5`. Document mode phases are **PNG**, **Text**, and **Markdown (VLM)** when `--ocrai` is active.
 
 ```
-# TTY (OCR succeeded):
-Denoising 2 images [document, low] [███████████████░░░░] 1/2
-  ✓ scan.jpg   → scan-denoised.png, scan.txt
-  ✓ notes.heic → notes-denoised.png, notes.txt
-Completed: 2 succeeded, 0 failed in 0:12.
+# TTY (document + --ocrai):
+Document denoise · low · 1 image · output ~/Desktop
 
-# TTY (OCR skipped or failed — PNG only):
-  ✓ scan.jpg   → scan-denoised.png
+[1/1] scan.jpg
+  ✓ PNG      6.2s    ~/Desktop/scan-denoised.png
+  ✓ Text     1.6s    ~/Desktop/scan.txt
+  ✓ Markdown 28.3s   ~/Desktop/scan.md
 
-# Non-TTY (both artifacts):
-scan.jpg → scan-denoised.png, scan.txt
+Done · 1 succeeded · 0 failed · 0:36
+
+# TTY (OCR skipped — PNG only; Text phase shows skipped):
+  – Text       skipped
+
+# Non-TTY:
+scan.jpg: PNG → /path/to/scan-denoised.png (6.2s)
+scan.jpg: Text → /path/to/scan.txt (1.6s)
+scan.jpg: Markdown (VLM) → /path/to/scan.md (28.3s)
 
 # stderr (Tesseract missing — once per batch; default OCR only):
 Warning: Tesseract not found; skipping text extraction. Install tesseract to enable OCR.
@@ -208,14 +214,11 @@ Warning: Tesseract not found; skipping text extraction. Install tesseract to ena
 # stderr (OCR runtime failure — per file; either backend):
 Warning: OCR failed for scan.jpg: {reason}
 
-# TTY (--ocrai, first run — download before denoise progress):
-Downloading Qwen2.5-VL-3B-Instruct-Q8_0.gguf...
-Downloading Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf...
-Denoising 1 images [document, low] [████████████████████] 1/1
-  ✓ scan.jpg   → scan-denoised.png, scan.txt
-Completed: 1 succeeded, 0 failed in 0:45.
+# Download (before job header, first --ocrai run):
+Downloading Qwen2.5-VL-3B-Instruct-mmproj-q8_0.gguf (806 MB)...
 
-# stderr (VLM download failure — aborts entire job before inference):
+# stderr (--ocrai runtime failure — per file; .txt may still succeed):
+Warning: --ocrai failed for scan.jpg: {reason}
 Error: could not download Qwen2.5-VL-3B-Instruct-Q8_0.gguf. Check your network or download manually from https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF and place in {MODELS_DIR}.
 ```
 
@@ -236,17 +239,19 @@ These extend the table in `specification-denoise.md §2.10`. All existing rows r
 | Model already cached | No download; proceed directly to inference |
 | Sauvola window larger than image dimension | `scikit-image` raises `ValueError`; treat as per-file failure: `{path} FAILED: image too small for document mode (minimum dimension: {window}px)` |
 | `--no-text` passed | PNG only; no OCR; no stderr warning |
-| `--ocrai` passed (without `--no-text`) | VLM OCR; Tesseract not invoked |
-| `--ocrai --no-text` passed | PNG only; no OCR; no stderr warning |
+| `--ocrai` passed (without `--no-text`) | Tesseract `.txt` plus VLM `.md` |
+| `--ocrai --no-text` passed | PNG only; no `.txt` or `.md`; no stderr warning |
 | `--ocrai` outside `document` mode | Flag ignored |
-| Tesseract not on PATH (default OCR) | Warn once per batch on stderr; PNG succeeds; file counts as success |
+| Tesseract not on PATH | Warn once per batch on stderr; PNG succeeds; no `.txt`; `--ocrai` `.md` may still succeed |
 | Tesseract present, OCR runtime failure | Warn per file on stderr; PNG succeeds; no `.txt`; file counts as success |
 | VLM weights download fails | Fail entire job before inference (same pattern as `archivist_medium`) |
 | VLM weights already cached | No download; load model once per batch |
-| VLM loaded, inference runtime failure | Warn per file on stderr; PNG succeeds; no `.txt`; file counts as success |
+| VLM loaded, inference runtime failure | Warn per file: `Warning: --ocrai failed for {filename}: {reason}`; PNG succeeds; `.txt` unaffected |
 | `llama-cpp-python` missing or lacks `Qwen25VLChatHandler` | Fail entire job before inference with install/platform message |
-| OCR returns empty string | Write empty `{stem}.txt`; file counts as success |
+| Tesseract returns empty string | Write empty `{stem}.txt`; file counts as success |
+| VLM returns empty/whitespace-only string | Write empty `{stem}.md`; file counts as success |
 | `{stem}.txt` already exists | Write `{stem}-0001.txt` (independent of PNG index) |
+| `{stem}.md` already exists | Write `{stem}-0001.md` (independent of PNG and `.txt` index) |
 
 The minimum image dimension for `--strength low` is 75 px (the Sauvola window size). For `--strength high` it is 25 px. Images smaller than the window fail per-file; the batch continues.
 
@@ -260,7 +265,7 @@ The minimum image dimension for `--strength low` is 75 px (the Sauvola window si
 | Single AI pass; Sauvola binarize + anti-alias | [ADR-019](./adr/019-document-binarize-antialias.md) (supersedes ADR-018) |
 | Morph cleanup, edge-only anti-alias, flat snap | [ADR-020](./adr/020-document-postprocessing-refinements.md) |
 | Default Tesseract OCR + `--no-text` | [ADR-021](./adr/021-document-ocr-tesseract.md) |
-| Opt-in VLM OCR + `--ocrai` | [ADR-022](./adr/022-opt-in-vlm-ocr-ocrai.md) |
+| Opt-in VLM OCR + `--ocrai` | [ADR-022](./adr/022-opt-in-vlm-ocr-ocrai.md), [ADR-023](./adr/023-ocrai-markdown-additive.md) |
 
 ---
 
@@ -278,7 +283,9 @@ easyupscaler/
     document_ocrai.py       # VLM OCR: resize, prompt, llama.cpp inference
     ocrai_catalog.py        # VLM filenames, URLs, repo fallback order, constants
     ocrai_downloader.py     # ensure_ocrai_models(): two-file download lifecycle
-    ocrai_service.py        # OcraiService: load model once per batch; extract_text()
+    ocrai_prompt.py          # load_ocrai_prompt(): read prompts/ocrai.yaml
+    prompts/
+      ocrai.yaml             # VLM Markdown extraction prompt
     pipeline.py             # DenoiseService: document branch after _run_passes
     backends/
       book_compact_backend.py   # catalog/backend only; not invoked by document mode
@@ -309,7 +316,7 @@ No new config keys in `config.toml`.
 - `easyupscaler denoise document tiny.png` (< 25 px in any dimension) fails per-file with a clear minimum-dimension error and exits `1`.
 - All `document` mode tests pass alongside existing tests; package coverage remains ≥ 80%.
 - `models list` and `--help` do not load PyTorch and respond under 500 ms regardless of whether document-mode models have been downloaded.
-- `easyupscaler denoise document --ocrai scan.jpg` downloads VLM weights on first run (~4.5 GB), writes `scan-denoised.png` and multilingual `scan.txt`.
+- `easyupscaler denoise document --ocrai scan.jpg` downloads VLM weights on first run (~4.1 GB), writes `scan-denoised.png`, `scan.txt` (Tesseract), and `scan.md` (VLM).
 - `easyupscaler denoise document --ocrai --no-text scan.jpg` writes PNG only with no download of VLM weights.
 - VLM download failure exits `1` before any denoise inference begins.
 
@@ -319,15 +326,15 @@ No new config keys in `config.toml`.
 
 ### 6.1 Purpose
 
-`--ocrai` replaces Tesseract with **Qwen2.5-VL-3B-Instruct** running through **in-process llama.cpp** (`llama-cpp-python`). It is opt-in; default document mode behavior is unchanged.
+`--ocrai` **additionally** runs **Qwen2.5-VL-3B-Instruct** through **in-process llama.cpp** (`llama-cpp-python`) and writes `{stem}.md`. Tesseract still produces `{stem}.txt` when OCR is enabled. See [ADR-023](./adr/023-ocrai-markdown-additive.md).
 
 Use `--ocrai` when:
 
+- Markdown structure (headings, lists) is useful
 - Text is handwritten or in non-Latin scripts
-- Tesseract quality is insufficient
-- Multilingual extraction without per-language configuration is needed
+- Tesseract plain text is insufficient
 
-Trade-offs: ~4.5 GB first-run download, higher RAM use (~5–6 GB loaded), and slower per-image OCR than Tesseract.
+Trade-offs: ~4.1 GB first-run download, higher RAM use (~5–6 GB loaded), and extra per-image latency on top of Tesseract.
 
 ### 6.2 Dependency
 
@@ -352,7 +359,7 @@ Two GGUF files are required. Both are stored in `$XDG_DATA_HOME/easyupscaler/mod
 | Constant | Filename | Role | Approx. size |
 |----------|----------|------|--------------|
 | `OCRAI_BACKBONE_FILENAME` | `Qwen2.5-VL-3B-Instruct-Q8_0.gguf` | Text backbone (Q8_0) | ~3.3 GB |
-| `OCRAI_MMPROJ_FILENAME` | `Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf` | Vision encoder (always F16) | ~1.25 GB |
+| `OCRAI_MMPROJ_FILENAME` | `Qwen2.5-VL-3B-Instruct-mmproj-q8_0.gguf` | Vision encoder (Q8_0; ggml-org primary) | ~805 MB |
 
 **Repo fallback order** (try each repo until both files download successfully):
 
@@ -406,37 +413,53 @@ Images already ≤2 MP are not upscaled.
 | Constant | Value | Role |
 |----------|-------|------|
 | `OCRAI_MAX_PIXELS` | `2_000_000` | Max input area before downscale |
-| `OCRAI_PROMPT` | (see below) | Fixed extraction instruction |
+| `OCRAI_PROMPT` | `easyupscaler/denoise/prompts/ocrai.yaml` (`prompt` key) | Fixed extraction instruction |
 | `OCRAI_MAX_TOKENS` | `4096` | Output token cap |
 | `OCRAI_TEMPERATURE` | `0.0` | Deterministic extraction |
 | `OCRAI_N_CTX` | `8192` | Context window |
 
-**Builtin prompt** (`OCRAI_PROMPT`):
+**Builtin prompt:** loaded from `easyupscaler/denoise/prompts/ocrai.yaml` (`prompt` key) via `load_ocrai_prompt()`. The prompt frames the task as document-to-Markdown conversion (not generic "OCR"), following conventions from Qwen VL OCR cookbooks, [olmOCR](https://github.com/allenai/olmocr), and SmolDocling-style document parsing: natural reading order, Markdown pipe tables, LaTeX math, and strict no-hallucination rules.
 
 ```
-Extract all visible text from this document image.
-Output plain UTF-8 text only.
-Preserve the original language, script, and reading order (top to bottom, left to right where applicable).
-Do not translate.
-Do not add commentary, markdown, labels, or descriptions.
-If there is no text, output nothing.
+Convert this document image to Markdown, as if you were reading the page naturally.
+
+Transcribe all visible text exactly as shown. Preserve the original language and script. Do not translate. Do not invent or guess text that is not visible.
+
+Structure and formatting:
+- Use # and ## for titles and section headings when the layout indicates them.
+- Use standard Markdown for paragraphs, lists, emphasis, and blockquotes.
+- Preserve natural reading order. For multi-column layouts, read each column top to bottom, columns left to right.
+- Convert tables to standard Markdown pipe tables (header row and separator line). Do not use HTML tables or LaTeX tabular.
+- Convert mathematical formulas to LaTeX. Use \( \) for inline math and \[ \] for display math.
+- Use ☐ and ☑ for unchecked and checked boxes.
+- For figures or charts without extractable text, add a brief ![description]() only when needed for context.
+
+Accuracy:
+- Transcribe carefully; watch for easily confused characters (0/O, 1/l/I).
+- Include handwritten text when legible.
+
+Output rules:
+- Return Markdown only.
+- Do not add explanations, summaries, or commentary about the image.
+- Do not wrap the entire output in a code fence.
+- If there is no readable text, output nothing.
 ```
 
 Pass the prepared RGB image to `create_chat_completion` via a `file://` URI or equivalent encoding supported by `Qwen25VLChatHandler`.
 
-**Post-processing:** trim leading/trailing whitespace from model output. Do not strip interior content. Write result via `ImageIO.write_txt()` (same path rules as Tesseract).
+**Post-processing:** trim leading/trailing whitespace from model output. Do not strip interior content. Write result via `ImageIO.write_md()` (`{stem}.md`, indexed conflicts independent of `.txt` and PNG).
 
 ### 6.6 Failure semantics
 
 | Scenario | Behavior |
 |----------|----------|
 | `--ocrai` without `--no-text`, weights missing | Download; abort job on failure |
-| `--ocrai --no-text` | No VLM download; no inference |
-| Model loaded, inference raises | Warn per file: `Warning: OCR failed for {filename}: {reason}`; PNG succeeds |
-| Model returns empty/whitespace-only string | Write empty `{stem}.txt` |
+| `--ocrai --no-text` | No VLM download; no `.md`; Tesseract also skipped |
+| Model loaded, inference raises | Warn per file: `Warning: --ocrai failed for {filename}: {reason}`; PNG and `.txt` unaffected |
+| Model returns empty/whitespace-only string | Write empty `{stem}.md` |
 | `--ocrai` in non-`document` mode | Flag ignored |
 
-Runtime inference failures do **not** change exit code when the PNG is written successfully (same soft-fail as Tesseract in [ADR-021](./adr/021-document-ocr-tesseract.md)).
+Runtime `--ocrai` inference failures do **not** change exit code when the PNG is written successfully. Tesseract failures remain independent ([ADR-021](./adr/021-document-ocr-tesseract.md)).
 
 ### 6.7 Future batching
 

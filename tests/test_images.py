@@ -199,3 +199,21 @@ def test_write_txt_custom_output_dir(tmp_path: Path) -> None:
     output = ImageIO().write_txt("text", source, output_dir=output_dir)
     assert output == output_dir / "scan.txt"
     assert output.exists()
+
+
+def test_write_md_uses_input_stem(tmp_path: Path) -> None:
+    source = tmp_path / "scan.jpg"
+    source.write_bytes(b"image")
+    output = ImageIO().write_md("# Title", source)
+    assert output.name == "scan.md"
+    assert output.read_text(encoding="utf-8") == "# Title"
+
+
+def test_write_md_conflict_index(tmp_path: Path) -> None:
+    source = tmp_path / "scan.jpg"
+    source.write_bytes(b"image")
+    image_io = ImageIO()
+    first = image_io.write_md("# first", source)
+    second = image_io.write_md("# second", source)
+    assert first.name == "scan.md"
+    assert second.name == "scan-0001.md"

@@ -1,20 +1,18 @@
-import sys
 import time
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
 
+from easyupscaler.cli.job_progress import (
+    DenoiseJobConfig,
+    collect_denoise_outputs,
+    create_denoise_job_display,
+    is_tty_stdout,
+)
 from easyupscaler.denoise.pipeline import DenoiseResult, DenoiseService
 from easyupscaler.io.heic import ensure_heif_registered
 
 EMPTY_INPUT_ERROR = "Error: no input images. Pass one or more file paths."
-UNSUPPORTED_MODEL_FLAG_ERROR = (
-    "Error: --model is not supported for 'denoise'. "
-    "Model is selected automatically by mode and strength."
-)
-COMPLETED_SUMMARY_TEMPLATE = "Completed: {succeeded} succeeded, {failed} failed in {elapsed}."
 VALID_MODES = {"photo", "art", "manga", "document"}
 VALID_STRENGTHS = {"low", "high"}
 
@@ -26,6 +24,7 @@ def run_denoise(
     strength: str,
     output_dir: Path | None = None,
     extract_text: bool = True,
+    use_ocrai: bool = False,
 ) -> None:
     if not paths:
         typer.echo(EMPTY_INPUT_ERROR, err=True)
@@ -53,71 +52,35 @@ def run_denoise(
 
     ensure_heif_registered()
     resolved_paths = [Path(path) for path in paths]
-    is_tty = sys.stdout.isatty()
+    is_tty = is_tty_stdout()
     service = DenoiseService()
+    display = create_denoise_job_display(
+        is_tty=is_tty,
+        config=DenoiseJobConfig(
+            mode=mode,
+            strength=strength,
+            file_count=len(resolved_paths),
+            output_dir=output_dir,
+            extract_text=extract_text,
+            use_ocrai=use_ocrai,
+        ),
+    )
 
     results: list[DenoiseResult] = []
-    download_progress: Progress | None = None
-    denoise_progress: Progress | None = None
-    denoise_task_id = None
+    started_at = time.perf_counter()
 
     try:
-        started_at = time.perf_counter()
+        display.begin_job()
 
-        if is_tty:
-            download_progress = Progress(
-                TextColumn("Downloading {task.fields[filename]}"),
-                BarColumn(),
-                TextColumn("{task.completed}/{task.total}"),
-                console=Console(),
-                transient=True,
-            )
-
-        def download_callback(filename: str, bytes_done: int, bytes_total: int | None) -> None:
-            if is_tty:
-                if download_progress is not None:
-                    if not download_progress.finished:
-                        download_progress.start()
-                    total = bytes_total or bytes_done or 1
-                    if download_progress.tasks:
-                        download_progress.update(
-                            download_progress.tasks[0].id,
-                            completed=min(bytes_done, total),
-                            total=total,
-                        )
-                    else:
-                        download_progress.add_task(
-                            "download",
-                            total=total,
-                            completed=bytes_done,
-                            filename=filename,
-                        )
-            else:
-                typer.echo(f"Downloading {filename}...")
-
-        if is_tty:
-            denoise_progress = Progress(
-                TextColumn(
-                    "Denoising {task.total} images [{task.fields[mode]}, {task.fields[strength]}]"
-                ),
-                BarColumn(),
-                TextColumn("{task.completed}/{task.total}"),
-                TimeElapsedColumn(),
-                console=Console(),
-                transient=False,
-            )
-            denoise_progress.start()
-            denoise_task_id = denoise_progress.add_task(
-                "denoise",
-                total=len(resolved_paths),
-                mode=mode,
-                strength=strength,
-            )
+        def on_phase(event):
+            display.handle_phase(event)
 
         def on_progress(result: DenoiseResult) -> None:
-            if denoise_progress is not None and denoise_task_id is not None:
-                denoise_progress.advance(denoise_task_id)
-            _print_result_line(result, tty=is_tty)
+            display.complete_file(
+                path=result.path,
+                error=result.error,
+                outputs=collect_denoise_outputs(result),
+            )
 
         def on_warning(message: str) -> None:
             typer.echo(message, err=True)
@@ -127,68 +90,24 @@ def run_denoise(
             mode,  # type: ignore[arg-type]
             strength,  # type: ignore[arg-type]
             on_progress=on_progress,
-            on_download_progress=download_callback,
+            on_phase=on_phase,
+            on_download_progress=display.handle_download,
             output_dir=output_dir,
             extract_text=extract_text,
+            use_ocrai=use_ocrai,
             on_warning=on_warning,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None
-    finally:
-        if download_progress is not None:
-            download_progress.stop()
-        if denoise_progress is not None:
-            denoise_progress.stop()
 
     succeeded = sum(1 for result in results if result.error is None)
     failed = len(results) - succeeded
-
-    if is_tty:
-        elapsed = time.perf_counter() - started_at
-        typer.echo(
-            COMPLETED_SUMMARY_TEMPLATE.format(
-                succeeded=succeeded,
-                failed=failed,
-                elapsed=_format_elapsed(elapsed),
-            )
-        )
+    display.finish_job(
+        succeeded=succeeded,
+        failed=failed,
+        elapsed_seconds=time.perf_counter() - started_at,
+    )
 
     if failed > 0:
         raise typer.Exit(code=1)
-
-
-def _print_result_line(result: DenoiseResult, *, tty: bool) -> None:
-    if result.error is None and result.output is not None:
-        pass_note = ""
-        if tty and result.pass_description:
-            pass_note = f"   (2 passes: {result.pass_description})"
-        output_names = _format_output_artifacts(result, tty=tty)
-        if tty:
-            typer.echo(f"  ✓ {result.path.name} → {output_names}{pass_note}")
-        else:
-            typer.echo(f"{result.path} → {output_names}")
-        return
-
-    if tty:
-        typer.echo(f"  ✗ {result.path.name} — {result.error}")
-    else:
-        typer.echo(f"{result.path} FAILED: {result.error}")
-
-
-def _format_output_artifacts(result: DenoiseResult, *, tty: bool) -> str:
-    if result.output is None:
-        return ""
-    outputs = [result.output.name if tty else str(result.output)]
-    if result.text_output is not None:
-        outputs.append(result.text_output.name if tty else str(result.text_output))
-    return ", ".join(outputs)
-
-
-def _format_elapsed(elapsed_seconds: float) -> str:
-    total_seconds = int(elapsed_seconds)
-    minutes, seconds = divmod(total_seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes}:{seconds:02d}"

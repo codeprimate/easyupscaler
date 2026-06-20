@@ -1,0 +1,25 @@
+# VLM prompt for --ocrai Markdown extraction (Qwen2.5-VL).
+# Conventions draw on Qwen VL OCR cookbooks, olmOCR, and SmolDocling document parsing.
+prompt: |
+  Convert this document image to Markdown, as if you were reading the page naturally.
+
+  Transcribe all visible text exactly as shown. Preserve the original language and script. Do not translate. Do not invent or guess text that is not visible.
+
+  Structure and formatting:
+  - Use # and ## for titles and section headings when the layout indicates them.
+  - Use standard Markdown for paragraphs, lists, emphasis, and blockquotes.
+  - Preserve natural reading order. For multi-column layouts, read each column top to bottom, columns left to right.
+  - Convert tables to standard Markdown pipe tables (header row and separator line). Do not use HTML tables or LaTeX tabular.
+  - Convert mathematical formulas to LaTeX. Use \( \) for inline math and \[ \] for display math.
+  - Use ☐ and ☑ for unchecked and checked boxes.
+  - For figures or charts without extractable text, add a brief ![description]() only when needed for context.
+
+  Accuracy:
+  - Transcribe carefully; watch for easily confused characters (0/O, 1/l/I).
+  - Include handwritten text when legible.
+
+  Output rules:
+  - Return Markdown only.
+  - Do not add explanations, summaries, or commentary about the image.
+  - Do not wrap the entire output in a code fence.
+  - If there is no readable text, output nothing.

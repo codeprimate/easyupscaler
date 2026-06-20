@@ -26,3 +26,4 @@ Index of accepted decisions for easyupscaler MVP. Each ADR is immutable once acc
 | [020](./adr/020-document-postprocessing-refinements.md) | Document post-processing: morph, edge-only AA, flat snap | Accepted |
 | [021](./adr/021-document-ocr-tesseract.md) | Default Tesseract OCR for document denoise mode | Accepted |
 | [022](./adr/022-opt-in-vlm-ocr-ocrai.md) | Opt-in VLM OCR via `--ocrai` (Qwen2.5-VL + llama.cpp) | Accepted |
+| [023](./adr/023-ocrai-markdown-additive.md) | `--ocrai` additive Markdown; Tesseract unchanged for `.txt` | Accepted |

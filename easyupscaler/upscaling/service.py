@@ -1,3 +1,4 @@
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,6 +7,7 @@ from easyupscaler.config.settings import ConfigService
 from easyupscaler.errors import ImageReadError, ModelNotFoundError
 from easyupscaler.io.images import ImageIO
 from easyupscaler.models.registry import ModelRegistry
+from easyupscaler.progress import PhaseEvent, PhaseKind, PhaseStatus
 from easyupscaler.upscaling.backends.base import UpscalerBackend
 
 
@@ -41,6 +43,7 @@ class UpscaleService:
         paths: list[Path],
         model_name: str | None,
         on_progress: Callable[[UpscaleResult], None] | None = None,
+        on_phase: Callable[[PhaseEvent], None] | None = None,
         *,
         output_dir: Path | None = None,
     ) -> list[UpscaleResult]:
@@ -59,8 +62,15 @@ class UpscaleService:
         backend = self._backend_factory(entry.path)
         results: list[UpscaleResult] = []
 
-        for path in paths:
-            result = self._process_path(path, backend, output_dir=output_dir)
+        for file_index, path in enumerate(paths):
+            result = self._process_path(
+                path,
+                backend,
+                file_index=file_index,
+                file_count=len(paths),
+                output_dir=output_dir,
+                on_phase=on_phase,
+            )
             results.append(result)
             if on_progress is not None:
                 on_progress(result)
@@ -73,7 +83,10 @@ class UpscaleService:
         path: Path,
         backend: UpscalerBackend,
         *,
+        file_index: int,
+        file_count: int,
         output_dir: Path | None = None,
+        on_phase: Callable[[PhaseEvent], None] | None = None,
     ) -> UpscaleResult:
         if not path.exists():
             return UpscaleResult(path=path, output=None, error="file not found")
@@ -81,6 +94,17 @@ class UpscaleService:
             return UpscaleResult(path=path, output=None, error="not a file")
 
         try:
+            if on_phase is not None:
+                on_phase(
+                    PhaseEvent(
+                        file_index=file_index,
+                        file_count=file_count,
+                        path=path,
+                        phase=PhaseKind.UPSCALE,
+                        status=PhaseStatus.RUNNING,
+                    )
+                )
+            started_at = time.perf_counter()
             image = self._image_io.read(path)
             upscaled = backend.upscale(image)
             output = self._image_io.write(upscaled, path, output_dir=output_dir)
@@ -91,6 +115,18 @@ class UpscaleService:
         except RuntimeError as exc:
             return UpscaleResult(path=path, output=None, error=str(exc))
         else:
+            if on_phase is not None:
+                on_phase(
+                    PhaseEvent(
+                        file_index=file_index,
+                        file_count=file_count,
+                        path=path,
+                        phase=PhaseKind.UPSCALE,
+                        status=PhaseStatus.DONE,
+                        elapsed_seconds=time.perf_counter() - started_at,
+                        output_path=output,
+                    )
+                )
             return UpscaleResult(path=path, output=output, error=None)
 
     def _maybe_empty_mps_cache(self) -> None:

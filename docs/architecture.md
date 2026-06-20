@@ -219,7 +219,7 @@ Spandrel does **not** convert PIL/NumPy to tensors or implement tiling — that 
 - Output: always JPEG, `quality=95`, `subsampling=0` ([ADR-003](./adr/003-image-output-conventions.md))
 - RGBA PNG: convert to RGB before save
 - Naming: `{input_stem}-upscaled.jpg` beside input (default) or under optional `output_dir` ([ADR-016](./adr/016-optional-output-directory.md)); on conflict, `{input_stem}-upscaled-NNNN.jpg` ([ADR-003](./adr/003-image-output-conventions.md), [ADR-011](./adr/011-output-conflict-indexing.md))
-- `write()`, `write_png()`, `write_denoised()`, and `write_txt()` accept optional `output_dir: Path | None`
+- `write()`, `write_png()`, `write_denoised()`, `write_txt()`, and `write_md()` accept optional `output_dir: Path | None`
 - When `output_dir` is set, ensures the directory exists before resolving indexed filenames
 - Indexed suffix when base output exists; never overwrite without prompt
 
@@ -301,6 +301,8 @@ easyupscaler/
     models.py
     scale.py                  # scale subcommand (formerly bare upscale)
     denoise.py                # denoise subcommand
+    job_progress.py           # phase-aware TTY/plain job display (Mockup A)
+  progress.py                 # PhaseEvent types shared by services and CLI
   config/
     paths.py                  # XDG directory helpers
     settings.py               # ConfigService (no torch)
@@ -315,7 +317,10 @@ easyupscaler/
     document_ocrai.py         # VLM OCR orchestration (resize, prompt)
     ocrai_catalog.py          # VLM filenames, URLs, constants
     ocrai_downloader.py       # two-file GGUF download with repo fallback
-    ocrai_service.py          # OcraiService: llama.cpp load + extract_text
+    ocrai_prompt.py           # load_ocrai_prompt(): read prompts/ocrai.yaml
+    prompts/
+      ocrai.yaml              # VLM Markdown extraction prompt
+    ocrai_service.py          # OcraiService: load model once per batch; extract_markdown()
     downloader.py             # auto-download denoise weights
     pipeline.py               # DenoiseService (document branch + OCR in _process_path)
     backends/
@@ -450,4 +455,5 @@ Linux CI uses mocked backend. MPS tests are manual or optional slow markers.
 | [019](./adr/019-document-binarize-antialias.md) | Document mode: Archiver + Sauvola binarize + anti-alias |
 | [020](./adr/020-document-postprocessing-refinements.md) | Document post-processing: morph, edge-only AA, flat snap |
 | [021](./adr/021-document-ocr-tesseract.md) | Default Tesseract OCR for document denoise |
-| [022](./adr/022-opt-in-vlm-ocr-ocrai.md) | Opt-in VLM OCR via `--ocrai` |
+| [022](./adr/022-opt-in-vlm-ocr-ocrai.md) | Opt-in VLM OCR via `--ocrai` (Qwen2.5-VL + llama.cpp) |
+| [023](./adr/023-ocrai-markdown-additive.md) | `--ocrai` additive Markdown; Tesseract unchanged for `.txt` |

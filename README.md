@@ -93,10 +93,11 @@ easyupscaler denoise photo ~/Pictures/IMG_1234.heic
 easyupscaler denoise art illustration.png
 easyupscaler denoise manga --strength high page.png
 easyupscaler denoise document scan.jpg
+easyupscaler denoise document --ocrai scan.jpg
 easyupscaler denoise photo *.jpg --output ./cleaned
 ```
 
-**Output:** `{name}-denoised.png` (lossless PNG, same resolution as input). **Document mode** also writes `{name}.txt` with extracted text by default (requires [Tesseract](https://github.com/tesseract-ocr/tesseract) on PATH). Use `--no-text` for PNG only.
+**Output:** `{name}-denoised.png` (lossless PNG, same resolution as input). **Document mode** also writes `{name}.txt` with extracted text by default (requires [Tesseract](https://github.com/tesseract-ocr/tesseract) on PATH). Use `--no-text` for PNG only. Pass `--ocrai` to additionally write `{name}.md` via VLM (~4.1 GB model download on first use).
 
 ### Picking a mode
 
@@ -116,7 +117,7 @@ For **photo** mode, strength matters:
 
 For **art** and **manga**, `low` is lighter cleanup; `high` is more aggressive on compression artifacts.
 
-For **document**, output is always grayscale PNG plus plain-text OCR by default (`scan.jpg` → `scan-denoised.png` and `scan.txt`). Install Tesseract for text extraction (`brew install tesseract` on macOS). Use `--no-text` for image only. `low` (default) suits clean scans and camera shots; `high` tightens local thresholding for faint ink or aged paper. Printed text works well; handwriting is poor. Details: [specification-document-mode.md](docs/specification-document-mode.md).
+For **document**, output is always grayscale PNG plus plain-text OCR by default (`scan.jpg` → `scan-denoised.png` and `scan.txt`). Install Tesseract for text extraction (`brew install tesseract` on macOS). Use `--ocrai` to additionally write structured Markdown (`scan.md`) for handwriting and non-Latin scripts (~4.1 GB download on first use). Use `--no-text` for image only. `low` (default) suits clean scans; `high` tightens thresholding for faint ink. Details: [specification-document-mode.md](docs/specification-document-mode.md).
 
 **HEIC (iPhone photos):** Photo mode runs two passes automatically — noise removal, then compression cleanup. Strength controls how aggressive the first pass is.
 

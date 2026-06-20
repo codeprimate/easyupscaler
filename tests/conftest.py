@@ -29,3 +29,37 @@ def isolated_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(paths_module, "MODELS_DIR", data_home / "easyupscaler" / "models")
 
     return tmp_path
+
+
+def emit_phase_done(
+    on_phase,
+    *,
+    path: Path,
+    phase,
+    output_path: Path | None = None,
+    file_index: int = 0,
+    file_count: int = 1,
+) -> None:
+    if on_phase is None:
+        return
+    from easyupscaler.progress import PhaseEvent, PhaseStatus
+
+    on_phase(
+        PhaseEvent(
+            file_index=file_index,
+            file_count=file_count,
+            path=path,
+            phase=phase,
+            status=PhaseStatus.RUNNING,
+        )
+    )
+    on_phase(
+        PhaseEvent(
+            file_index=file_index,
+            file_count=file_count,
+            path=path,
+            phase=phase,
+            status=PhaseStatus.DONE,
+            output_path=output_path,
+        )
+    )

@@ -35,21 +35,24 @@ Full denoise command specification: [specification-denoise.md](./specification-d
 - By default, writes `{stem}-upscaled.jpg` beside each input (same directory); with `--output`, writes under `DIR` instead
 - If the target `{stem}-upscaled.jpg` already exists in the output location, writes `{stem}-upscaled-NNNN.jpg` with the lowest available 4-digit index (`0001`, `0002`, …)
 - Exits `0` if all files succeeded; exits `2` if invoked with no arguments (displays help); exits `1` if any file failed or image paths are given but all fail to process
-- Shows a Rich progress bar when stdout is a TTY; falls back to one plain status line per file when piped or redirected
+- Shows phase-aware job progress when stdout is a TTY; plain milestone lines when piped or redirected
 
 **stdout / stderr contract**
 
 ```
-# TTY (progress bar + per-file lines):
-Upscaling 3 images with RealESRGAN_x4plus [███████████████░░░░] 2/3
-  ✓ photo.png → photo-upscaled.jpg
-  ✓ scan.jpeg → scan-upscaled.jpg
-  ✗ broken.png — unsupported format
-Completed: 2 succeeded, 1 failed in 1:23.
+# TTY:
+Upscale · RealESRGAN_x4plus · 1 image · output same directory as input
+
+[1/1] photo.png
+  ✓ Upscale  45.0s   /path/to/photo-upscaled.jpg
+
+Done · 1 succeeded · 0 failed · 0:45
 
 # Non-TTY (pipe/redirect):
-photo.png → photo-upscaled.jpg
-scan.jpeg → scan-upscaled.jpg
+Upscale · RealESRGAN_x4plus · 1 image · output same directory as input
+photo.png: Upscale...
+photo.png: Upscale → /path/to/photo-upscaled.jpg
+Done · 1 succeeded · 0 failed · 0:45
 broken.png FAILED: unsupported format
 ```
 

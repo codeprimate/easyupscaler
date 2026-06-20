@@ -11,6 +11,8 @@ OUTPUT_SUFFIX = "-upscaled.jpg"
 DENOISE_OUTPUT_SUFFIX = "-denoised.png"
 TEXT_OUTPUT_SUFFIX = ".txt"
 TEXT_OUTPUT_EXTENSION = ".txt"
+MARKDOWN_OUTPUT_SUFFIX = ".md"
+MARKDOWN_OUTPUT_EXTENSION = ".md"
 OUTPUT_INDEX_WIDTH = 4
 OUTPUT_INDEX_START = 1
 OUTPUT_INDEX_MAX = 9999
@@ -133,6 +135,17 @@ class ImageIO:
         output_path.write_text(text, encoding="utf-8")
         return output_path
 
+    def write_md(
+        self,
+        markdown: str,
+        source_path: Path,
+        *,
+        output_dir: Path | None = None,
+    ) -> Path:
+        output_path = self._resolve_markdown_output_path(source_path, output_dir=output_dir)
+        output_path.write_text(markdown, encoding="utf-8")
+        return output_path
+
     def _resolve_text_output_path(
         self,
         source_path: Path,
@@ -144,6 +157,20 @@ class ImageIO:
             base_suffix=TEXT_OUTPUT_SUFFIX,
             indexed_stem_suffix="",
             extension=TEXT_OUTPUT_EXTENSION,
+            output_dir=output_dir,
+        )
+
+    def _resolve_markdown_output_path(
+        self,
+        source_path: Path,
+        *,
+        output_dir: Path | None = None,
+    ) -> Path:
+        return self._resolve_indexed_output_path(
+            source_path,
+            base_suffix=MARKDOWN_OUTPUT_SUFFIX,
+            indexed_stem_suffix="",
+            extension=MARKDOWN_OUTPUT_EXTENSION,
             output_dir=output_dir,
         )
 

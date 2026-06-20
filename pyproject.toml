@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "easyupscaler"
-version = "0.2.0"
+version = "0.2.1"
 description = "CLI for upscaling images with GAN-based models"
 readme = "README.md"
 license = "MIT"
@@ -21,6 +21,8 @@ dependencies = [
     "scikit-image>=0.22",
     "pillow-heif>=0.16",
     "pytesseract>=0.3",
+    "llama-cpp-python>=0.3",
+    "pyyaml>=6",
 ]
 
 [project.urls]
@@ -43,6 +45,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["easyupscaler"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"easyupscaler/denoise/prompts/ocrai.yaml" = "easyupscaler/denoise/prompts/ocrai.yaml"
 
 [tool.mypy]
 strict = false

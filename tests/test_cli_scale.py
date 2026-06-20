@@ -6,8 +6,9 @@ import pytest
 from typer.testing import CliRunner
 
 from easyupscaler.cli.main import app
-from easyupscaler.cli.scale import run_scale
+from easyupscaler.progress import PhaseKind
 from easyupscaler.upscaling.service import UpscaleResult
+from tests.conftest import emit_phase_done
 
 runner = CliRunner()
 
@@ -43,19 +44,21 @@ def test_non_tty_output(isolated_paths, tmp_path: Path, monkeypatch: pytest.Monk
     image.write_bytes(b"image")
     output = tmp_path / "input-upscaled.jpg"
 
-    def fake_run(paths, model_name, on_progress=None, **kwargs):
+    def fake_run(paths, model_name, on_progress=None, on_phase=None, **kwargs):
         assert kwargs.get("output_dir") is None
         result = UpscaleResult(path=image, output=output, error=None)
+        emit_phase_done(on_phase, path=image, phase=PhaseKind.UPSCALE, output_path=output)
         if on_progress:
             on_progress(result)
         return [result]
 
     monkeypatch.setattr("easyupscaler.cli.scale.UpscaleService", lambda: MagicMock(run=fake_run))
-    monkeypatch.setattr("easyupscaler.cli.scale.sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("easyupscaler.cli.job_progress.sys.stdout.isatty", lambda: False)
 
     result = runner.invoke(app, ["scale", str(image)])
     assert result.exit_code == 0
-    assert f"{image} → {output}" in result.stdout
+    assert "Upscale →" in result.stdout
+    assert str(output) in result.stdout
 
 
 def test_tty_completed_includes_elapsed(
@@ -67,46 +70,46 @@ def test_tty_completed_includes_elapsed(
     image.write_bytes(b"image")
     output = tmp_path / "input-upscaled.jpg"
     perf_counter_values = iter([100.0, 145.0])
-    echoed: list[str] = []
 
-    def fake_run(paths, model_name, on_progress=None, **kwargs):
+    def fake_run(paths, model_name, on_progress=None, on_phase=None, **kwargs):
         assert kwargs.get("output_dir") is None
         result = UpscaleResult(path=image, output=output, error=None)
+        if on_phase is not None:
+            from easyupscaler.progress import PhaseEvent, PhaseKind, PhaseStatus
+
+            on_phase(
+                PhaseEvent(
+                    file_index=0,
+                    file_count=1,
+                    path=image,
+                    phase=PhaseKind.UPSCALE,
+                    status=PhaseStatus.RUNNING,
+                )
+            )
+            on_phase(
+                PhaseEvent(
+                    file_index=0,
+                    file_count=1,
+                    path=image,
+                    phase=PhaseKind.UPSCALE,
+                    status=PhaseStatus.DONE,
+                    output_path=output,
+                )
+            )
         if on_progress:
             on_progress(result)
         return [result]
 
-    class FakeProgress:
-        def __init__(self, *args, **kwargs) -> None:
-            pass
-
-        def start(self) -> None:
-            pass
-
-        def add_task(self, *args, **kwargs) -> int:
-            return 0
-
-        def advance(self, *args, **kwargs) -> None:
-            pass
-
-        def stop(self) -> None:
-            pass
-
     monkeypatch.setattr("easyupscaler.cli.scale.UpscaleService", lambda: MagicMock(run=fake_run))
-    monkeypatch.setattr("easyupscaler.cli.scale.Progress", FakeProgress)
-    monkeypatch.setattr("easyupscaler.cli.scale.sys.stdout.isatty", lambda: True)
-    monkeypatch.setattr(
-        "easyupscaler.cli.scale.typer.echo",
-        lambda message, **kwargs: echoed.append(message),
-    )
+    monkeypatch.setattr("easyupscaler.cli.job_progress.sys.stdout.isatty", lambda: True)
     monkeypatch.setattr(
         "easyupscaler.cli.scale.time.perf_counter",
         lambda: next(perf_counter_values),
     )
 
-    run_scale([str(image)], model="test-model")
-
-    assert "Completed: 1 succeeded, 0 failed in 0:45." in echoed
+    result = runner.invoke(app, ["scale", str(image)])
+    assert result.exit_code == 0
+    assert "Done · 1 succeeded · 0 failed · 0:45" in result.stdout
 
 
 def test_partial_failure_exit_one(
@@ -129,7 +132,7 @@ def test_partial_failure_exit_one(
         return results
 
     monkeypatch.setattr("easyupscaler.cli.scale.UpscaleService", lambda: MagicMock(run=fake_run))
-    monkeypatch.setattr("easyupscaler.cli.scale.sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("easyupscaler.cli.job_progress.sys.stdout.isatty", lambda: False)
 
     result = runner.invoke(app, ["scale", str(bad), str(good)])
     assert result.exit_code == 1

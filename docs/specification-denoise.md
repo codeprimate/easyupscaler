@@ -40,7 +40,7 @@ easyupscaler denoise <mode> [--strength low|high] [--no-text] [--ocrai] [--outpu
 | `<mode>` | `photo`, `art`, `manga`, `document` | Required | Controls model selection and output colorspace |
 | `--strength` | `low`, `high` | `low` | Controls which model variant is selected |
 | `--no-text` | flag | off | Skip OCR text extraction (`document` mode only; no-op elsewhere) |
-| `--ocrai` | flag | off | Use VLM OCR instead of Tesseract (`document` mode only; see [specification-document-mode.md §6](./specification-document-mode.md#6-opt-in-vlm-ocr-ocrai)) |
+| `--ocrai` | flag | off | Also write VLM Markdown (`.md`) alongside Tesseract `.txt` (`document` mode only; see [specification-document-mode.md §6](./specification-document-mode.md#6-opt-in-vlm-ocr-ocrai)) |
 | `--output` / `-o` | Directory path | (beside input) | Write all outputs under `DIR`; created if missing ([ADR-016](./adr/016-optional-output-directory.md)) |
 | `<image> ...` | One or more file paths | Required | Shell expands globs before invocation |
 
@@ -167,30 +167,47 @@ All URLs verified via HTTP HEAD (200 OK) on 2026-06-20. File sizes:
 - Optimized for scanned or photographed text. Single Archiver Medium AI pass, then CPU post-processing (Sauvola binarization, morph cleanup, edge anti-alias, flat-region snap).
 - Output is always grayscale PNG regardless of input colorspace.
 - `--strength` controls Sauvola window size and anti-alias sigma, not the AI model.
-- Default OCR uses Tesseract; pass `--ocrai` for multilingual VLM OCR ([specification-document-mode.md §6](./specification-document-mode.md#6-opt-in-vlm-ocr-ocrai)).
+- Default OCR uses Tesseract for `.txt`; pass `--ocrai` to additionally write VLM Markdown (`.md`) ([specification-document-mode.md §6](./specification-document-mode.md#6-opt-in-vlm-ocr-ocrai)).
 - Full specification: [specification-document-mode.md](./specification-document-mode.md).
 
 ---
 
 ### 2.5 stdout / stderr contract
 
+Job progress uses phase-aware output (Mockup A). A job header prints once, then each file shows live phase status in TTY mode and milestone lines when piped.
+
 ```
-# TTY (progress bar + per-file lines):
-Denoising 3 images [photo, low] [███████████████░░░░] 2/3
-  ✓ photo.heic → photo-denoised.png   (2 passes: SCUNet PSNR + FBCNN)
-  ✓ scan.jpg   → scan-denoised.png
-  ✗ broken.png — cannot read image
-Completed: 2 succeeded, 1 failed in 0:08.
+# TTY (document + --ocrai, single file):
+Document denoise · low · 1 image · output ~/Desktop
+
+[1/1] scan.heic
+  ✓ PNG      6.2s    ~/Desktop/scan-denoised.png
+  ✓ Text     1.6s    ~/Desktop/scan.txt
+  ✓ Markdown 28.3s   ~/Desktop/scan.md
+
+Done · 1 succeeded · 0 failed · 0:36
+
+# TTY (photo, two-pass HEIC):
+Photo denoise · low · 1 image · output same directory as input
+
+[1/1] photo.heic
+  ✓ Denoise  8.2s    /path/to/photo-denoised.png  (2 passes: SCUNet PSNR + FBCNN)
+
+Done · 1 succeeded · 0 failed · 0:08
 
 # Non-TTY (pipe/redirect):
-photo.heic → photo-denoised.png
-scan.jpg → scan-denoised.png
+Photo denoise · low · 1 image · output same directory as input
+photo.heic: Denoise...
+photo.heic: Denoise → /path/to/photo-denoised.png
+Done · 1 succeeded · 0 failed · 0:08
 broken.png FAILED: cannot read image
 ```
 
 - Errors and warnings go to **stderr**; progress and file status go to **stdout**.
-- Two-pass HEIC output lines note `(2 passes: ...)` in TTY mode only.
-- Download progress lines precede the denoising progress bar; they use the same TTY/non-TTY detection.
+- Two-pass HEIC detail appears on the Denoise phase `done` line in TTY mode.
+- TTY checklist lines use color: pending (dim), running (yellow), done (green + cyan path).
+- The checklist redraws synchronously on every phase event; a background thread ticks running timers every 250ms, including during VLM/upscale (UI writes to `/dev/tty` so llama stdout suppression does not freeze the display).
+- Model download lines precede the job header; one line per file at start in non-TTY mode.
 
 ---
 
@@ -286,7 +303,10 @@ easyupscaler/
     document_ocrai.py        # VLM OCR orchestration (resize, delegate to OcraiService)
     ocrai_catalog.py         # VLM filenames, URLs, prompt, generation constants
     ocrai_downloader.py      # ensure_ocrai_models(): two-file download with repo fallback
-    ocrai_service.py         # OcraiService: llama.cpp load + extract_text()
+    ocrai_prompt.py          # load_ocrai_prompt(): read prompts/ocrai.yaml
+    prompts/
+      ocrai.yaml             # VLM Markdown extraction prompt
+    ocrai_service.py         # OcraiService: llama.cpp load + extract_markdown()
     downloader.py            # download_model(key): fetch + verify + save; progress callback
     pipeline.py              # DenoiseService: single-pass, two-pass (photo HEIC), document branch
     backends/

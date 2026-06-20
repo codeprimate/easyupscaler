@@ -94,6 +94,11 @@ def denoise_command(
         "--no-text",
         help="Skip OCR text extraction (document mode only).",
     ),
+    ocrai: bool = typer.Option(
+        False,
+        "--ocrai",
+        help="Also run VLM OCR and write Markdown (document mode only).",
+    ),
     output: str | None = typer.Option(
         None,
         "--output",
@@ -110,6 +115,7 @@ def denoise_command(
         strength=strength,
         output_dir=output_dir,
         extract_text=not no_text,
+        use_ocrai=ocrai,
     )
 
 
