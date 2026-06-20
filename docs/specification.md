@@ -34,7 +34,7 @@ Full denoise command specification: [specification-denoise.md](./specification-d
 - Processes images **sequentially** in argument order; continues on per-file failure
 - By default, writes `{stem}-upscaled.jpg` beside each input (same directory); with `--output`, writes under `DIR` instead
 - If the target `{stem}-upscaled.jpg` already exists in the output location, writes `{stem}-upscaled-NNNN.jpg` with the lowest available 4-digit index (`0001`, `0002`, …)
-- Exits `0` if all files succeeded; exits `1` if any file failed or no paths were given
+- Exits `0` if all files succeeded; exits `2` if invoked with no arguments (displays help); exits `1` if any file failed or image paths are given but all fail to process
 - Shows a Rich progress bar when stdout is a TTY; falls back to one plain status line per file when piped or redirected
 
 **stdout / stderr contract**
@@ -430,7 +430,7 @@ install:
 - [ ] A grayscale PNG input produces a valid RGB JPEG output
 - [ ] An image with both dimensions ≤ 512 is processed in a single forward pass (no tiling)
 - [ ] An image larger than 512 in either dimension is processed with tiling (no OOM on 16 GB)
-- [ ] Running with no paths exits `1` with the empty-input error before loading PyTorch
+- [ ] Running `scale` with no arguments displays help and exits `2` before loading PyTorch
 - [ ] Running with no default model and no `--model` exits `1` with the missing-default error
 - [ ] TTY output includes a progress bar; non-TTY output is plain per-file lines
 

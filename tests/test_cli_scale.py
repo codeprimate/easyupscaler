@@ -12,10 +12,11 @@ from easyupscaler.upscaling.service import UpscaleResult
 runner = CliRunner()
 
 
-def test_empty_scale_exit_one_before_torch(without_torch) -> None:
+def test_empty_scale_shows_help_without_torch(without_torch) -> None:
     result = runner.invoke(app, ["scale"])
-    assert result.exit_code == 1
-    assert "Error: no input images" in result.stderr
+    assert result.exit_code == 2
+    assert "Usage" in result.output
+    assert "Examples:" in result.output
     assert "torch" not in sys.modules
 
 

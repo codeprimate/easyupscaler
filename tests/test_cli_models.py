@@ -33,7 +33,7 @@ def test_models_without_subcommand_shows_help(without_torch) -> None:
     result = runner.invoke(models_app, [], prog_name="easyupscaler models")
     assert result.exit_code == 0
     assert "Missing command" not in result.output
-    assert "Manage installed upscaling models" in result.output
+    assert "Import and manage models used by the scale command" in result.output
     assert "list" in result.output
     assert "install-completion" not in result.output
     assert "show-completion" not in result.output

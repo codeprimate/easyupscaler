@@ -8,7 +8,7 @@ from easyupscaler.errors import DuplicateModelError, ImportModelError, ModelNotF
 from easyupscaler.models.registry import ModelRegistry
 
 models_app = typer.Typer(
-    help="Manage installed upscaling models.",
+    help="Import and manage models used by the scale command.",
     add_completion=False,
 )
 
@@ -53,9 +53,40 @@ def _format_models_table(entries: list) -> str:
     return "\n".join([header, divider, *rows])
 
 
+@models_app.command("import")
+def import_model_command(
+    path: Annotated[
+        Path,
+        typer.Argument(help="Path to a local model weight file (.pth, .pt, .safetensors)."),
+    ],
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Replace an existing model with the same name."),
+    ] = False,
+) -> None:
+    """Import a model weight file from disk.
+
+    Supported formats: .pth, .pt, .safetensors. The architecture is detected
+    automatically. Find community models at openmodeldb.info.
+    """
+    from easyupscaler.models.import_model import import_model
+
+    try:
+        import_model(path, force=force)
+    except DuplicateModelError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    except ImportModelError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    except Exception as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+
+
 @models_app.command("list")
 def list_models() -> None:
-    """List installed models."""
+    """List installed models and which is set as default."""
     registry = ModelRegistry()
     entries = registry.list()
     typer.echo(_format_models_table(entries))
@@ -65,7 +96,7 @@ def list_models() -> None:
 def set_default(
     name: Annotated[str, typer.Argument(help="Registry name of the model to set as default.")],
 ) -> None:
-    """Set the default upscaling model."""
+    """Set the model used by scale when --model is not specified."""
     registry = ModelRegistry()
     try:
         registry.get(name)
@@ -113,27 +144,3 @@ def remove_model(
             f"Warning: {name} was the default model. No default is now set.",
             err=True,
         )
-
-
-@models_app.command("import")
-def import_model_command(
-    path: Annotated[Path, typer.Argument(help="Path to a local model weight file.")],
-    force: Annotated[
-        bool,
-        typer.Option("--force", help="Replace an existing model with the same name."),
-    ] = False,
-) -> None:
-    """Import a local super-resolution model weight file."""
-    from easyupscaler.models.import_model import import_model
-
-    try:
-        import_model(path, force=force)
-    except DuplicateModelError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from None
-    except ImportModelError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from None
-    except Exception as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(code=1) from None
