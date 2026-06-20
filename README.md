@@ -1,222 +1,176 @@
 # easyupscaler
 
-Upscale images from the terminal with community super-resolution models — no GUI, no workflow editor, no weight conversion.
+Upscale and clean up images from the terminal. No GUI, no workflow editor — just commands you can put in a script.
 
-```bash
-easyupscaler models import ~/Downloads/RealESRGAN_x4plus.pth
-easyupscaler models default RealESRGAN_x4plus
-easyupscaler scale photo.png
-# → photo-upscaled.jpg
-```
+**Upscale** makes images larger with AI models you install yourself (typically 2× or 4×). **Denoise** removes sensor noise and compression artifacts at the same size — models download automatically.
 
-> **Platform:** easyupscaler is tested only on **Apple Silicon Mac** (macOS with MPS). Linux, Windows, and Intel Mac are unsupported here — they may work, but are not verified.
-
-## Why this exists
-
-Tools like ComfyUI, A1111, and Upscayl are built around larger products or desktop apps. If you already have a `.pth` or `.safetensors` upscaler and want to run it against local files from a script, you usually end up wiring PyTorch, Spandrel, tiling, and device selection yourself.
-
-easyupscaler is a single command that handles model import, defaults, batch runs, and tiled inference on Apple Silicon. Import a weight file once, then upscale with one argument.
-
-## What you get
-
-- **One entry point** — `easyupscaler scale` for upscaling, `easyupscaler denoise` for AI denoising, and `easyupscaler models` for model management
-- **Community weights, unchanged** — import `.pth` and `.safetensors` files that work in ComfyUI and [OpenModelDB](https://openmodeldb.info/)
-- **Batch-friendly** — pass multiple paths or shell globs; exit code `1` if any file fails
-- **Large images** — tiled inference with automatic tile-size reduction on out-of-memory
-- **Fully offline** — no internet access; all models are stored locally in standard XDG directories
-
-Output is always `{stem}-upscaled.jpg` beside each input by default (JPEG quality 95, 4:4:4 chroma subsampling). Use `--output DIR` or `-o DIR` to write all outputs under one directory instead. If that file already exists, the next run writes `{stem}-upscaled-0001.jpg`, then `-0002`, and so on. PNG inputs (including RGBA and grayscale) are converted to RGB.
-
-## Requirements
-
-| | |
-|---|---|
-| Python | 3.13+ |
-| Primary platform | Apple Silicon macOS (MPS inference) |
-| Secondary | Linux x86_64/arm64 (CPU, best-effort) |
-| Not tested | Windows, Intel Mac |
-
-First inference loads PyTorch and Spandrel — expect a few seconds of startup. Model management commands stay under 500 ms.
+Tested on **Apple Silicon Mac** (macOS with MPS). Linux may work on CPU. Windows and Intel Mac are untested.
 
 ## Install
 
+You need **Python 3.13+** on your PATH as `python3`.
+
 ```bash
-git clone https://github.com/codeprimate/easyupscaler
-cd easyupscaler
-make install
+pip install git+https://github.com/codeprimate/easyupscaler.git
 ```
 
-`make install` runs `python3 -m pip install .` — it installs into whatever `python3` on your PATH resolves to (system or Homebrew Python), not the uv project venv.
+That installs the `easyupscaler` command into whatever environment `pip` belongs to (system Python, Homebrew, or an active venv). Use `python3 -m pip install …` if `pip` is not on your PATH.
 
-Requires Python 3.13+ on PATH as `python3`.
+First upscale or denoise run loads PyTorch — expect a few seconds of startup. Listing or managing models stays fast.
 
-**Developing the project** uses uv for the locked dev environment:
+## Your first upscale
 
-```bash
-uv sync
-make test
-```
-
-## Quickstart
-
-Download a super-resolution weight file from a source you trust — [Real-ESRGAN x4plus](https://openmodeldb.info/) is a common starting point. Prefer `.safetensors` when available.
+Upscale models are **not bundled**. Download a weight file from a source you trust. [Real-ESRGAN x4plus](https://openmodeldb.info/) on [OpenModelDB](https://openmodeldb.info/) is a solid starting point for photos. Prefer `.safetensors` over `.pth` when both are available.
 
 ```bash
-# 1. Import the model (validates through Spandrel, copies into local storage)
-easyupscaler models import /path/to/RealESRGAN_x4plus.pth
+# Import once — validates the file and copies it into local storage
+easyupscaler models import ~/Downloads/RealESRGAN_x4plus.pth
 
-# 2. Set it as the default
+# Remember it for future runs
 easyupscaler models default RealESRGAN_x4plus
 
-# 3. Upscale
+# Upscale
 easyupscaler scale ~/Pictures/photo.jpg
+# → ~/Pictures/photo-upscaled.jpg
 ```
 
-Output lands next to the input: `~/Pictures/photo-upscaled.jpg`. Dimensions are input size × model scale (a 2048×2048 image with a 4× model becomes 8192×8192; a 1× model keeps the same size for detail enhancement).
+That is the whole workflow: import, set default, run.
 
-Override the default for one run:
+## Understanding upscale models
+
+This is the part that takes a minute to learn. The app itself is simple. Picking the right model for your image is not.
+
+### What you are installing
+
+An upscale model is a single weight file (`.pth` or `.safetensors`) trained for a specific job. easyupscaler accepts models that work in ComfyUI, A1111, and OpenModelDB — no conversion step.
+
+Each model has a **scale factor** baked in:
+
+| Scale | What it does |
+|-------|--------------|
+| **4×** | Most common. A 1000×800 photo becomes 4000×3200. |
+| **2×** | Half the enlargement, often sharper on very large sources. |
+| **1×** | Same pixel dimensions, but adds detail and sharpness. Sometimes called "restoration" rather than upscaling. |
+
+Check scale after import (`easyupscaler models list`) or on the model's OpenModelDB page before you run.
+
+### Which model for which image
+
+There is no single best model. Community models differ by training data and architecture:
+
+- **General photos** — Real-ESRGAN x4plus, 4x-UltraSharp, and similar "photo" models on OpenModelDB.
+- **Anime and illustration** — Models trained on anime art (search OpenModelDB for "anime"). A photo model on line art often looks soft or waxy.
+- **1× detail pass** — Some workflows run a 1× restoration model before or instead of a 4× upscale. Import it like any other model; output size matches input.
+
+When results look wrong, try a different model before blaming the tool. Model pages on OpenModelDB usually say what they were trained for.
+
+### Security note on `.pth` files
+
+`.pth` files use Python pickle and can run arbitrary code when loaded. Only import weights from sources you trust. `.safetensors` avoids that risk.
+
+## Upscaling
 
 ```bash
-easyupscaler scale --model RealESRGAN_x4plus scan.png print.png
-easyupscaler scale photo.jpg --output ./results
+easyupscaler scale photo.jpg
+easyupscaler scale scan.png print.png          # multiple files
+easyupscaler scale *.jpg                       # shell expands globs
+easyupscaler scale photo.jpg --model 4xUltrasharp   # override default for one run
+easyupscaler scale *.png --output ./results    # write all outputs to one folder
 ```
 
-## Denoise
+**Output:** `{name}-upscaled.jpg` next to each input (JPEG, quality 95). PNG and HEIC inputs are read fine; output is always JPEG. If the file already exists, the next run writes `-upscaled-0001.jpg`, then `-0002`, and so on.
 
-Denoise removes sensor noise and compression artifacts at 1× resolution. Models are downloaded automatically on first use.
+**Exit code:** `0` if every file succeeded, `1` if any failed. Useful in scripts.
+
+Large images are processed in tiles automatically. If memory runs out, tile size shrinks and the run retries.
+
+## Denoising
+
+Denoise cleans noise and compression artifacts **without enlarging** the image. You do not import models — pick a **mode** and easyupscaler downloads the right weights on first use.
 
 ```bash
-# Photo mode (JPEG, PNG, HEIC)
-easyupscaler denoise photo --strength low ~/Pictures/photo.heic
-
-# Art or manga illustrations
-easyupscaler denoise art *.jpg
+easyupscaler denoise photo ~/Pictures/IMG_1234.heic
+easyupscaler denoise art illustration.png
 easyupscaler denoise manga --strength high page.png
+easyupscaler denoise photo *.jpg --output ./cleaned
 ```
 
-Output is `{stem}-denoised.png` beside each input by default (PNG, lossless). Use `--output DIR` or `-o DIR` to write under one directory. HEIC photo mode runs a two-pass pipeline (SCUNet + FBCNN). See [docs/specification-denoise.md](docs/specification-denoise.md) for the full model selection matrix.
+**Output:** `{name}-denoised.png` (lossless PNG, same resolution as input).
 
-**Photo strength:** `--strength low` (default) uses SCUNet PSNR and is the right choice for typical phone/camera JPEGs. `--strength high` switches to SCUNet GAN for heavy sensor noise; on already-clean JPEGs it can add visible speckle, color blotches, and synthetic texture in smooth areas — not “better,” just more aggressive.
+### Picking a mode
 
-Batch via shell globs:
+| Mode | Use for |
+|------|---------|
+| `photo` | Camera and phone shots — JPEG, PNG, HEIC |
+| `art` | Digital art, game textures, non-manga illustration |
+| `manga` | Manga and comic pages (same models as `art`, different color handling) |
+
+### Strength (`--strength low` or `high`)
+
+For **photo** mode, strength matters:
+
+- **`low` (default)** — Best for typical phone and camera JPEGs. Removes noise without inventing texture.
+- **`high`** — For visibly noisy sources (high ISO, low light). On already-clean JPEGs it can add speckle, color blotches, and fake detail in smooth areas like sky and skin. If `high` looks worse, switch back to `low`.
+
+For **art** and **manga**, `low` is lighter cleanup; `high` is more aggressive on compression artifacts.
+
+**HEIC (iPhone photos):** Photo mode runs two passes automatically — noise removal, then compression cleanup. Strength controls how aggressive the first pass is.
+
+Denoise requires network access **only** the first time each model is needed. After download, runs are offline like upscale.
+
+## Managing models
+
+These commands apply to **upscale models you imported**. Denoise models are managed automatically and do not appear in `models list`.
 
 ```bash
-easyupscaler scale *.png
-easyupscaler scale photos/*.jpg --model 4xUltrasharp
-```
-
-## Commands
-
-### Scale (upscale)
-
-```
-easyupscaler scale [--model NAME] [--output DIR] <image> [<image> ...]
-```
-
-| Flag / arg | Description |
-|---|---|
-| `--model NAME` | Use this registry model instead of the configured default |
-| `--output`, `-o DIR` | Write all outputs to this directory (created if missing) |
-| `<image> ...` | One or more file paths (shell expands globs before the process starts) |
-
-Progress goes to stdout. Errors and warnings go to stderr. In a TTY you get a Rich progress bar and per-file ✓/✗ lines. When piped or redirected, output is one plain line per file.
-
-Exit `0` when every file succeeds. Exit `1` on any failure, including an empty argument list.
-
-### Denoise
-
-```
-easyupscaler denoise <mode> [--strength low|high] [--output DIR] <image> [<image> ...]
-```
-
-| Flag / arg | Description |
-|---|---|
-| `<mode>` | `photo`, `art`, or `manga` — selects models automatically |
-| `--strength` | `low` (default) or `high` — in photo mode, `high` is SCUNet GAN (noisy sources); `low` is SCUNet PSNR (typical JPEGs) |
-| `--output`, `-o DIR` | Write all outputs to this directory (created if missing) |
-| `<image> ...` | One or more file paths |
-
-Output is PNG at 1× resolution (`{stem}-denoised.png`). Denoise models download automatically on first use. Always loads PyTorch.
-
-### Model management
-
-```
 easyupscaler models list
-easyupscaler models import <path> [--force]
-easyupscaler models default <name>
-easyupscaler models remove <name> [--yes]
+easyupscaler models import /path/to/model.safetensors
+easyupscaler models import /path/to/model.pth --force   # replace existing same name
+easyupscaler models default RealESRGAN_x4plus
+easyupscaler models remove RealESRGAN_x4plus              # prompts for confirmation
+easyupscaler models remove RealESRGAN_x4plus --yes        # skip prompt
 ```
 
-`list`, `default`, and `remove` do not load PyTorch. `import` loads weights to validate architecture, purpose, and scale.
+Import derives the registry name from the filename: `RealESRGAN_x4plus.pth` → `RealESRGAN_x4plus`.
 
-Import derives the registry name from the filename stem (`RealESRGAN_x4plus.pth` → `RealESRGAN_x4plus`). Accepted purposes are `SR` (upscalers) and `Restoration` (1× detail enhancers). Scale is read from the model. Duplicate names are rejected unless you pass `--force`.
+Supported model types: super-resolution (`SR`) and 1× restoration (`Restoration`). Face fixers, inpainting, and other specialty checkpoints are rejected at import.
 
-`.pth` imports emit a pickle security warning — only import models from sources you trust.
+## Where files are stored
 
-## Where files live
-
-Uses [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) paths. When `XDG_*` variables are unset, defaults are `~/.config` and `~/.local/share`.
-
-| File | Path |
-|---|---|
+| What | Where |
+|------|-------|
 | Default model preference | `~/.config/easyupscaler/config.toml` |
-| Installed model registry | `~/.local/share/easyupscaler/registry.json` |
-| Copied weight files | `~/.local/share/easyupscaler/models/` |
+| Installed upscale models (registry + weights) | `~/.local/share/easyupscaler/` |
+
+Paths follow [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) conventions. Override with `XDG_CONFIG_HOME` and `XDG_DATA_HOME` if you use them.
 
 ## Shell globs
 
-Glob expansion is the shell's job, not easyupscaler's. If no files match and your shell lacks `nullglob`, you may get a literal `*.png` path and a per-file "not found" error.
+Glob expansion is the shell's job, not easyupscaler's. If `*.png` matches nothing and your shell does not have `nullglob`, you may get a literal `*.png` path and a "file not found" error.
 
 ```bash
 shopt -s nullglob   # bash
 setopt nullglob     # zsh
 ```
 
-## How inference works
-
-1. **Spandrel** loads the weight file and detects architecture and scale.
-2. **Device** — MPS on Apple Silicon when available, otherwise CPU (with a stderr warning).
-3. **Tiling** — images larger than 512 px on a side are processed in overlapping tiles (512 px, 32 px overlap). On OOM, tile size halves until 128 px or failure.
-4. **MPS fallback** — if an MPS op fails mid-run, the image retries on CPU.
-
-This mirrors patterns from ComfyUI and A1111, which also wrap Spandrel with their own tiling code.
-
 ## Troubleshooting
 
-| Symptom | What to try |
-|---|---|
+| Problem | Fix |
+|---------|-----|
 | `no default model set` | Run `easyupscaler models default <name>` or pass `--model` |
-| `model 'foo' not found` | Run `easyupscaler models list` to see installed names |
-| `architecture not recognised` | Update easyupscaler; confirm the file is an SR model Spandrel supports |
-| `purpose '…' is not supported` | The checkpoint is inpainting, face restoration, or another unsupported type |
-| Slow on first run | PyTorch cold start is normal; later files in the same batch reuse the loaded model |
-| Out of memory | Tiling retries with smaller tiles automatically; very large images may still fail at the 128 px floor |
-| MPS unavailable | Inference falls back to CPU automatically |
-| Photo denoise looks speckled or blotchy at `--strength high` | Use `--strength low` (PSNR). GAN is for heavy noise; clean JPEGs often look worse |
+| `model 'foo' not found` | Run `easyupscaler models list` |
+| `architecture not recognised` | Update easyupscaler, or confirm the file is a supported upscale model |
+| `purpose '…' is not supported` | That checkpoint is inpainting, face restoration, or another unsupported type |
+| Slow first run | PyTorch cold start is normal; later files in the same batch reuse the loaded model |
+| Out of memory on huge images | Tiling retries with smaller tiles; very large images may still fail |
+| Photo denoise looks speckled at `--strength high` | Use `--strength low` — `high` is for noisy sources only |
 
-## Development
+Run `easyupscaler scale --help` or `easyupscaler denoise --help` for full flag details.
 
-Requires [uv](https://docs.astral.sh/uv/) for the locked dev environment:
-
-```bash
-make sync       # uv sync — dev dependencies into .venv
-make test       # ruff + mypy + pytest with ≥80% coverage (slow tests excluded)
-make build      # build wheel
-```
-
-`make install` is separate: it installs the CLI into system `python3` via pip, not into `.venv`.
-
-Slow end-to-end tests need real weights:
-
-```bash
-export EASYUPSCALER_TEST_WEIGHTS=/path/to/RealESRGAN_x4plus.pth
-uv run pytest -m slow
-```
-
-Architecture and design decisions live in [`docs/`](docs/).
+Developers: see [README-DEV.md](README-DEV.md) for clone setup, `make test`, and architecture pointers.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
 
-`spandrel-extra-arches` (a runtime dependency) includes architectures with separate license restrictions. Review that package if you need unrestricted commercial use of every supported architecture.
+The `spandrel-extra-arches` dependency includes some architectures with separate license terms. Review that package if unrestricted commercial use matters for your workflow.

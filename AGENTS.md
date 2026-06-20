@@ -16,6 +16,7 @@ This file describes **how to work in the repo**, not what the product does. Beha
 | [docs/adr/](docs/adr/) | Immutable decisions and rationale | Choosing or changing architectural approach |
 | [docs/adr.md](docs/adr.md) | ADR index | Finding the relevant ADR |
 | [README.md](README.md) | Install, quickstart, troubleshooting for end users | User-facing workflow changes |
+| [README-DEV.md](README-DEV.md) | Clone setup, Makefile, testing, architecture pointers | Dev workflow or toolchain changes |
 
 **Precedence:** specification for user-facing contracts; ADRs for structural choices; architecture for system design; mission for scope. If docs conflict with code, treat that as a bug — fix the code or update the docs in the same change. If docs conflict with each other, ask before proceeding.
 
@@ -35,7 +36,7 @@ Documentation is part of the deliverable. A code change that shifts behavior or 
 | New module, layer boundary, component, or data-flow path | `docs/architecture.md` |
 | New/changed architectural choice (backend, storage, lazy imports, toolchain, etc.) | New ADR in `docs/adr/`, index row in `docs/adr.md`, then `docs/architecture.md` |
 | Scope change (in or out of MVP) | `docs/mission.md`; spec if behavior follows |
-| Dev workflow (Make targets, test gate, lint/type tools, coverage) | ADR-009, ADR-010, or new ADR; `docs/architecture.md` toolchain section; `README.md` Development section |
+| Dev workflow (Make targets, test gate, lint/type tools, coverage) | ADR-009, ADR-010, or new ADR; `docs/architecture.md` toolchain section; `README-DEV.md` |
 | Dependency or Python version policy | `pyproject.toml`, `README.md`; ADR if policy-level |
 
 ### ADR workflow
@@ -62,9 +63,9 @@ Documentation is part of the deliverable. A code change that shifts behavior or 
 
 ### README workflow
 
-- README is for **users**, not implementers. Install, commands, paths, troubleshooting only.
-- Mirror spec-level user contracts; omit layer diagrams and ADR rationale.
-- Keep the Development section aligned with `Makefile` targets (see ADR-009).
+- [README.md](README.md) is for **users** — install, commands, paths, troubleshooting only.
+- [README-DEV.md](README-DEV.md) is for **implementers** — clone setup, Makefile, testing, architecture pointers. Keep it aligned with `Makefile` targets (see ADR-009).
+- Mirror spec-level user contracts in README; omit layer diagrams and ADR rationale there.
 
 ### Anti-patterns
 
@@ -228,7 +229,7 @@ These rules are enforced in code and documented in ADRs — read the source docs
 - **Principles:** KISS, single responsibility, explicit interfaces (protocols + constructor injection), named constants for tunable values, typed domain exceptions in `errors.py` mapped to CLI messages at the presentation layer.
 - **Testability:** Design new code so it can be exercised without GPU, network, or real weight files. See [Testing](#testing).
 
-Dev commands: `Makefile` and [README.md](README.md) Development section.
+Dev commands: `Makefile` and [README-DEV.md](README-DEV.md).
 
 ---
 
